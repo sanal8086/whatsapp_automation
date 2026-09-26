@@ -20,7 +20,12 @@ import {
   RefreshCw,
   MinusCircle,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Clock,
+  UserCheck,
+  UserX,
+  Mail,
+  Phone
 } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -28,13 +33,18 @@ import { AuditLog, MessagePricing } from '../../types';
 
 export const AdminPage: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'businesses' | 'audit' | 'pricing' | 'templates'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'users' | 'audit' | 'pricing' | 'templates'>('businesses');
   const [overview, setOverview] = useState<any>(null);
   const [businesses, setBusinesses] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [globalTemplates, setGlobalTemplates] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [pricingRates, setPricingRates] = useState<MessagePricing[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Search & Filters for Users Tab
+  const [userSearchQuery, setUserSearchQuery] = useState<string>('');
+  const [userFilterStatus, setUserFilterStatus] = useState<string>('ALL');
 
   // Search & Filters for Audit Logs
   const [auditFilterAction, setAuditFilterAction] = useState<string>('ALL');
@@ -58,15 +68,17 @@ export const AdminPage: React.FC = () => {
   const fetchAdminData = async () => {
     try {
       setLoading(true);
-      const [overData, bizData, tplData, auditData, pricingData] = await Promise.all([
+      const [overData, bizData, userData, tplData, auditData, pricingData] = await Promise.all([
         apiRequest('/admin/overview').catch(() => null),
         apiRequest('/admin/businesses').catch(() => []),
+        apiRequest('/admin/users').catch(() => []),
         apiRequest('/admin/global-templates').catch(() => []),
         apiRequest('/admin/audit-logs?limit=100').catch(() => []),
         apiRequest('/whatsapp/pricing/rates').catch(() => []),
       ]);
       setOverview(overData);
       setBusinesses(bizData);
+      setUsers(userData);
       setGlobalTemplates(tplData);
       setAuditLogs(auditData);
       setPricingRates(pricingData);
@@ -87,6 +99,25 @@ export const AdminPage: React.FC = () => {
       fetchAdminData();
     } catch (err: any) {
       alert(err.message || 'Status change failed');
+    }
+  };
+
+  const handleApprove = async (tenantId: string) => {
+    try {
+      await apiRequest(`/admin/businesses/${tenantId}/approve`, { method: 'POST' });
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message || 'Approval failed');
+    }
+  };
+
+  const handleReject = async (tenantId: string) => {
+    if (!confirm('Are you sure you want to reject this business application?')) return;
+    try {
+      await apiRequest(`/admin/businesses/${tenantId}/reject`, { method: 'POST' });
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message || 'Rejection failed');
     }
   };
 
@@ -193,9 +224,53 @@ export const AdminPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Action Banner for Pending Merchant Applications */}
+      {businesses.filter(b => b.status === 'PENDING_APPROVAL').length > 0 && (
+        <div style={{
+          background: 'linear-gradient(90deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%)',
+          border: '1px solid rgba(245, 158, 11, 0.4)',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Clock size={20} color="#F59E0B" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>
+                {businesses.filter(b => b.status === 'PENDING_APPROVAL').length} Merchant Application{businesses.filter(b => b.status === 'PENDING_APPROVAL').length > 1 ? 's' : ''} Awaiting Review
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                New merchants have registered and are waiting on approval before proceeding to WhatsApp onboarding.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => { setActiveTab('users'); setUserFilterStatus('PENDING_APPROVAL'); }}
+            className="btn"
+            style={{
+              background: 'var(--amber-gradient)',
+              color: '#fff',
+              fontWeight: 700,
+              padding: '8px 18px',
+              fontSize: '0.85rem',
+              boxShadow: '0 2px 10px rgba(245, 158, 11, 0.35)'
+            }}
+          >
+            Review & Accept Now ({businesses.filter(b => b.status === 'PENDING_APPROVAL').length})
+          </button>
+        </div>
+      )}
+
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px', marginBottom: '28px' }}>
-        <div className="glass-card" style={{ padding: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+        <div className="glass-card" style={{ padding: '20px', cursor: 'pointer' }} onClick={() => setActiveTab('businesses')}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total Businesses</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
             {overview?.total_businesses || 0}
@@ -203,12 +278,31 @@ export const AdminPage: React.FC = () => {
           <span style={{ fontSize: '0.72rem', color: 'var(--success)' }}>{overview?.active_businesses || 0} Active Tenants</span>
         </div>
 
-        <div className="glass-card" style={{ padding: '20px' }}>
+        <div
+          className="glass-card"
+          style={{
+            padding: '20px',
+            cursor: 'pointer',
+            border: businesses.filter(b => b.status === 'PENDING_APPROVAL').length > 0 ? '1px solid rgba(245, 158, 11, 0.4)' : undefined,
+            background: businesses.filter(b => b.status === 'PENDING_APPROVAL').length > 0 ? 'rgba(245, 158, 11, 0.05)' : undefined
+          }}
+          onClick={() => { setActiveTab('users'); setUserFilterStatus('PENDING_APPROVAL'); }}
+        >
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Pending Approvals</span>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: businesses.filter(b => b.status === 'PENDING_APPROVAL').length > 0 ? '#F59E0B' : 'var(--text-main)', marginTop: '4px' }}>
+            {businesses.filter(b => b.status === 'PENDING_APPROVAL').length}
+          </div>
+          <span style={{ fontSize: '0.72rem', color: businesses.filter(b => b.status === 'PENDING_APPROVAL').length > 0 ? '#F59E0B' : 'var(--text-dim)' }}>
+            {businesses.filter(b => b.status === 'PENDING_APPROVAL').length > 0 ? 'Action required' : 'All clear'}
+          </span>
+        </div>
+
+        <div className="glass-card" style={{ padding: '20px', cursor: 'pointer' }} onClick={() => { setActiveTab('users'); setUserFilterStatus('ALL'); }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Registered Users</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-            {overview?.total_users || 0}
+            {users.length || overview?.total_users || 0}
           </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Across all business accounts</span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Click to view user list</span>
         </div>
 
         <div className="glass-card" style={{ padding: '20px' }}>
@@ -216,10 +310,10 @@ export const AdminPage: React.FC = () => {
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#818CF8', marginTop: '4px' }}>
             ₹{(overview?.total_wallet_balance || 0).toLocaleString()}
           </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Prepaid WhatsApp funds in escrow</span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Prepaid WhatsApp funds</span>
         </div>
 
-        <div className="glass-card" style={{ padding: '20px' }}>
+        <div className="glass-card" style={{ padding: '20px', cursor: 'pointer' }} onClick={() => setActiveTab('audit')}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Audit Log Events</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#F43F5E', marginTop: '4px' }}>
             {auditLogs.length}
@@ -248,6 +342,38 @@ export const AdminPage: React.FC = () => {
         >
           <Building size={16} />
           Businesses Directory ({businesses.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('users')}
+          style={{
+            background: 'none',
+            border: 'none',
+            borderBottom: activeTab === 'users' ? '2px solid #EC4899' : '2px solid transparent',
+            padding: '12px 4px',
+            color: activeTab === 'users' ? '#fff' : 'var(--text-muted)',
+            fontWeight: 600,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Users size={16} />
+          Users & Approvals ({users.length})
+          {businesses.filter(b => b.status === 'PENDING_APPROVAL').length > 0 && (
+            <span style={{
+              background: 'var(--amber-gradient)',
+              color: '#fff',
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              padding: '2px 7px',
+              borderRadius: '10px'
+            }}>
+              {businesses.filter(b => b.status === 'PENDING_APPROVAL').length} PENDING
+            </span>
+          )}
         </button>
 
         <button
@@ -317,7 +443,7 @@ export const AdminPage: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                <th style={{ padding: '16px 20px' }}>Business</th>
+                <th style={{ padding: '16px 20px' }}>Business & Owner</th>
                 <th style={{ padding: '16px 20px' }}>WhatsApp Status</th>
                 <th style={{ padding: '16px 20px' }}>Subscription Lifecycle</th>
                 <th style={{ padding: '16px 20px' }}>Wallet Balance</th>
@@ -329,9 +455,16 @@ export const AdminPage: React.FC = () => {
               {businesses.map((biz) => (
                 <tr key={biz.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   <td style={{ padding: '14px 20px' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{biz.name}</div>
+                    <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>{biz.name}</div>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'monospace' }}>/{biz.slug}</span>
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>ID: {biz.id.slice(0, 10)}...</span>
+                    {biz.owner_name && (
+                      <div style={{ marginTop: '6px', padding: '6px 8px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', fontSize: '0.75rem' }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>👤 {biz.owner_name}</div>
+                        <div style={{ color: 'var(--text-dim)' }}>✉️ {biz.owner_email}</div>
+                        {biz.owner_phone && <div style={{ color: 'var(--text-dim)' }}>📞 {biz.owner_phone}</div>}
+                      </div>
+                    )}
                   </td>
 
                   <td style={{ padding: '14px 20px' }}>
@@ -363,69 +496,320 @@ export const AdminPage: React.FC = () => {
                   </td>
 
                   <td style={{ padding: '14px 20px' }}>
-                    <span className={`badge ${biz.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>
-                      {biz.status}
+                    <span className={`badge ${
+                      biz.status === 'ACTIVE' ? 'badge-success' :
+                      biz.status === 'APPROVED' ? 'badge-info' :
+                      biz.status === 'PENDING_APPROVAL' ? 'badge-warning' :
+                      'badge-danger'
+                    }`}>
+                      {biz.status === 'PENDING_APPROVAL' ? '⏳ PENDING' : biz.status}
                     </span>
                   </td>
 
                   <td style={{ padding: '14px 20px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => {
-                          setSelectedTenantId(biz.id);
-                          setSelectedTenantName(biz.name);
-                          setShowAdjustmentModal(true);
-                        }}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        title="Credit or Debit wallet balance with audit note"
-                      >
-                        Adjust Wallet
-                      </button>
+                      {/* Approve/Reject buttons for PENDING_APPROVAL tenants */}
+                      {biz.status === 'PENDING_APPROVAL' && (
+                        <>
+                          <button
+                            onClick={() => handleApprove(biz.id)}
+                            className="btn"
+                            style={{
+                              padding: '6px 14px',
+                              fontSize: '0.75rem',
+                              background: 'var(--emerald-gradient)',
+                              color: '#fff',
+                              fontWeight: 700,
+                              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                            }}
+                          >
+                            ✓ Approve
+                          </button>
+                          <button
+                            onClick={() => handleReject(biz.id)}
+                            className="btn"
+                            style={{
+                              padding: '6px 14px',
+                              fontSize: '0.75rem',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              color: 'var(--danger)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              fontWeight: 700,
+                            }}
+                          >
+                            ✕ Reject
+                          </button>
+                        </>
+                      )}
 
-                      <button
-                        onClick={() => handleExtendSubscription(biz.id, 30)}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        title="Extend subscription by 30 days"
-                      >
-                        +30d Sub
-                      </button>
+                      {/* Standard admin ops (only for non-pending tenants) */}
+                      {biz.status !== 'PENDING_APPROVAL' && biz.status !== 'REJECTED' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedTenantId(biz.id);
+                              setSelectedTenantName(biz.name);
+                              setShowAdjustmentModal(true);
+                            }}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                            title="Credit or Debit wallet balance with audit note"
+                          >
+                            Adjust Wallet
+                          </button>
 
-                      <button
-                        onClick={() => {
-                          setSelectedTenantId(biz.id);
-                          setSelectedTenantName(biz.name);
-                          setShowMarkPaidModal(true);
-                        }}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                      >
-                        Mark Paid
-                      </button>
+                          <button
+                            onClick={() => handleExtendSubscription(biz.id, 30)}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                            title="Extend subscription by 30 days"
+                          >
+                            +30d Sub
+                          </button>
 
-                      <button
-                        onClick={() => handleToggleStatus(biz.id)}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem', color: biz.status === 'ACTIVE' ? 'var(--danger)' : 'var(--success)' }}
-                      >
-                        {biz.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-                      </button>
+                          <button
+                            onClick={() => {
+                              setSelectedTenantId(biz.id);
+                              setSelectedTenantName(biz.name);
+                              setShowMarkPaidModal(true);
+                            }}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                          >
+                            Mark Paid
+                          </button>
 
-                      <button
-                        onClick={() => handleCancelSubscription(biz.id)}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--text-dim)' }}
-                        title="Cancel active subscription"
-                      >
-                        Cancel Sub
-                      </button>
+                          <button
+                            onClick={() => handleToggleStatus(biz.id)}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 10px', fontSize: '0.75rem', color: biz.status === 'ACTIVE' ? 'var(--danger)' : 'var(--success)' }}
+                          >
+                            {biz.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+                          </button>
+
+                          <button
+                            onClick={() => handleCancelSubscription(biz.id)}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--text-dim)' }}
+                            title="Cancel active subscription"
+                          >
+                            Cancel Sub
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* TAB 2: USERS & APPLICATIONS */}
+      {activeTab === 'users' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Controls Bar */}
+          <div className="glass-card" style={{ padding: '16px', display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
+              <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+              <input
+                type="text"
+                className="form-input"
+                style={{ paddingLeft: '36px' }}
+                placeholder="Search users by name, email, phone or business name..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Filter size={15} color="var(--text-dim)" />
+              <select
+                className="form-input"
+                style={{ width: 'auto' }}
+                value={userFilterStatus}
+                onChange={(e) => setUserFilterStatus(e.target.value)}
+              >
+                <option value="ALL">All Application Statuses</option>
+                <option value="PENDING_APPROVAL">Pending Approval ({businesses.filter(b => b.status === 'PENDING_APPROVAL').length})</option>
+                <option value="APPROVED">Approved</option>
+                <option value="ACTIVE">Active</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="glass-panel" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '16px 20px' }}>User Details</th>
+                  <th style={{ padding: '16px 20px' }}>Associated Business</th>
+                  <th style={{ padding: '16px 20px' }}>Role</th>
+                  <th style={{ padding: '16px 20px' }}>Application Status</th>
+                  <th style={{ padding: '16px 20px' }}>Joined Date</th>
+                  <th style={{ padding: '16px 20px', textAlign: 'right' }}>Admin Operations</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.filter(u => {
+                  const query = userSearchQuery.toLowerCase();
+                  const matchesSearch =
+                    (u.name || '').toLowerCase().includes(query) ||
+                    (u.email || '').toLowerCase().includes(query) ||
+                    (u.phone || '').toLowerCase().includes(query) ||
+                    (u.tenant_name || '').toLowerCase().includes(query);
+
+                  const matchesStatus =
+                    userFilterStatus === 'ALL' ||
+                    (userFilterStatus === 'PENDING_APPROVAL' && u.tenant_status === 'PENDING_APPROVAL') ||
+                    (userFilterStatus === 'APPROVED' && u.tenant_status === 'APPROVED') ||
+                    (userFilterStatus === 'ACTIVE' && u.tenant_status === 'ACTIVE') ||
+                    (userFilterStatus === 'REJECTED' && u.tenant_status === 'REJECTED');
+
+                  return matchesSearch && matchesStatus;
+                }).length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                      No registered users found matching the search criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  users.filter(u => {
+                    const query = userSearchQuery.toLowerCase();
+                    const matchesSearch =
+                      (u.name || '').toLowerCase().includes(query) ||
+                      (u.email || '').toLowerCase().includes(query) ||
+                      (u.phone || '').toLowerCase().includes(query) ||
+                      (u.tenant_name || '').toLowerCase().includes(query);
+
+                    const matchesStatus =
+                      userFilterStatus === 'ALL' ||
+                      (userFilterStatus === 'PENDING_APPROVAL' && u.tenant_status === 'PENDING_APPROVAL') ||
+                      (userFilterStatus === 'APPROVED' && u.tenant_status === 'APPROVED') ||
+                      (userFilterStatus === 'ACTIVE' && u.tenant_status === 'ACTIVE') ||
+                      (userFilterStatus === 'REJECTED' && u.tenant_status === 'REJECTED');
+
+                    return matchesSearch && matchesStatus;
+                  }).map((u) => {
+                    const isPending = u.tenant_status === 'PENDING_APPROVAL';
+                    return (
+                      <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '14px 20px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>
+                              {u.name}
+                            </div>
+                            {u.is_platform_admin && (
+                              <span className="badge badge-info" style={{ fontSize: '0.65rem' }}>SUPER ADMIN</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                            <Mail size={12} /> {u.email}
+                          </div>
+                          {u.phone && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                              <Phone size={12} /> {u.phone}
+                            </div>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '14px 20px' }}>
+                          {u.tenant_name ? (
+                            <div>
+                              <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{u.tenant_name}</div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'monospace' }}>/{u.tenant_slug}</span>
+                              {u.business_type && (
+                                <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{u.business_type}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>Platform Level (No Business)</span>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '14px 20px' }}>
+                          <span className="badge badge-neutral" style={{ textTransform: 'capitalize' }}>
+                            {u.role || (u.is_platform_admin ? 'Super Admin' : 'User')}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '14px 20px' }}>
+                          <span className={`badge ${
+                            u.tenant_status === 'ACTIVE' ? 'badge-success' :
+                            u.tenant_status === 'APPROVED' ? 'badge-info' :
+                            u.tenant_status === 'PENDING_APPROVAL' ? 'badge-warning' :
+                            u.tenant_status === 'REJECTED' ? 'badge-danger' :
+                            'badge-neutral'
+                          }`}>
+                            {u.tenant_status === 'PENDING_APPROVAL' ? '⏳ PENDING APPROVAL' :
+                             u.tenant_status === 'APPROVED' ? '✓ APPROVED' :
+                             u.tenant_status || u.user_status}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '14px 20px', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
+                          {new Date(u.created_at).toLocaleDateString(undefined, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </td>
+
+                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                          {isPending && u.tenant_id ? (
+                            <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => handleApprove(u.tenant_id)}
+                                className="btn"
+                                style={{
+                                  padding: '6px 14px',
+                                  fontSize: '0.75rem',
+                                  background: 'var(--emerald-gradient)',
+                                  color: '#fff',
+                                  fontWeight: 700,
+                                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                                }}
+                              >
+                                ✓ Approve
+                              </button>
+                              <button
+                                onClick={() => handleReject(u.tenant_id)}
+                                className="btn"
+                                style={{
+                                  padding: '6px 14px',
+                                  fontSize: '0.75rem',
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  color: 'var(--danger)',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                ✕ Reject
+                              </button>
+                            </div>
+                          ) : u.tenant_status === 'APPROVED' ? (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--info)', fontWeight: 600 }}>
+                              Ready for WhatsApp Setup
+                            </span>
+                          ) : u.tenant_status === 'ACTIVE' ? (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600 }}>
+                              Active Merchant
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                              —
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

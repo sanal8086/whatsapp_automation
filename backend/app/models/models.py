@@ -521,3 +521,31 @@ class CustomerConsent(Base):
     source = Column(String(100), default="MANUAL")  # PUBLIC_PAGE, WHATSAPP_INBOUND, EXCEL_IMPORT, API
     proof_reference = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=utc_now)
+
+
+# ----------------- WhatsApp Onboarding Session -----------------
+
+class WhatsAppOnboardingSession(Base):
+    __tablename__ = "whatsapp_onboarding_sessions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    tenant_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Hash of the OAuth state parameter (never store the raw state)
+    state_hash = Column(String(128), nullable=False, unique=True, index=True)
+
+    # CREATED -> IN_PROGRESS -> COMPLETED / FAILED / EXPIRED
+    status = Column(String(50), default="CREATED")
+
+    # Populated after Meta Embedded Signup returns
+    waba_id = Column(String(100), nullable=True)
+    phone_number_id = Column(String(100), nullable=True)
+    meta_business_id = Column(String(100), nullable=True)
+
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=utc_now)
+    expires_at = Column(DateTime, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    tenant = relationship("Tenant", backref="whatsapp_onboarding_sessions")

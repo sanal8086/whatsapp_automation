@@ -39,13 +39,13 @@ def register(req: UserRegister, db: Session = Depends(get_db)):
         slug = f"{base_slug}-{counter}"
         counter += 1
 
-    # Create Tenant
+    # Create Tenant with PENDING_APPROVAL status — admin must approve before onboarding continues
     tenant = Tenant(
         name=req.business_name,
         slug=slug,
         business_type=req.business_type or "Retail / Restaurant",
         currency=req.currency or "INR",
-        status="ACTIVE",
+        status="PENDING_APPROVAL",
         subscription_status="TRIAL"
     )
     db.add(tenant)
@@ -59,7 +59,7 @@ def register(req: UserRegister, db: Session = Depends(get_db)):
     )
     db.add(member)
 
-    # Initialize Wallet with welcome ₹200 promotional credit for WhatsApp testing!
+    # Initialize Wallet with welcome ₹250 promotional credit for WhatsApp testing!
     wallet = Wallet(
         tenant_id=tenant.id,
         currency=tenant.currency,
@@ -127,9 +127,11 @@ def register(req: UserRegister, db: Session = Depends(get_db)):
             "id": tenant.id,
             "name": tenant.name,
             "slug": tenant.slug,
-            "role": "OWNER"
+            "role": "OWNER",
+            "status": tenant.status
         }
     }
+
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -156,7 +158,8 @@ def login(req: UserLogin, db: Session = Depends(get_db)):
                 "id": tenant.id,
                 "name": tenant.name,
                 "slug": tenant.slug,
-                "role": membership.role
+                "role": membership.role,
+                "status": tenant.status
             }
 
     token = create_access_token({"sub": user.id, "email": user.email, "tenant_id": tenant_id})
@@ -172,6 +175,7 @@ def login(req: UserLogin, db: Session = Depends(get_db)):
         },
         "current_tenant": tenant_info
     }
+
 
 
 @router.get("/me")

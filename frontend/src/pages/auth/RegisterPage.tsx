@@ -35,7 +35,7 @@ export const RegisterPage: React.FC = () => {
         }),
       });
       login(data.access_token, data.user, data.current_tenant);
-      navigate('/app');
+      navigate('/waiting');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
     } finally {

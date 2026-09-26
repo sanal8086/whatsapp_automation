@@ -5,5 +5,5 @@ from app.models.models import (
     Customer, Segment, LoyaltyProgram, CustomerLoyaltyAccount,
     LoyaltyReward, LoyaltyTransaction, Campaign, CampaignRecipient,
     Automation, PublicPage, DailyTenantMetric, AuditLog,
-    MessagePricing, CustomerConsent
+    MessagePricing, CustomerConsent, WhatsAppOnboardingSession
 )

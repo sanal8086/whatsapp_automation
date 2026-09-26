@@ -25,6 +25,15 @@ export const LoginPage: React.FC = () => {
       login(data.access_token, data.user, data.current_tenant);
       if (data.user.is_platform_admin && !data.current_tenant) {
         navigate('/admin');
+      } else if (data.current_tenant) {
+        const tenantStatus = data.current_tenant.status;
+        if (tenantStatus === 'PENDING_APPROVAL' || tenantStatus === 'REJECTED') {
+          navigate('/waiting');
+        } else if (tenantStatus === 'APPROVED') {
+          navigate('/onboarding/whatsapp');
+        } else {
+          navigate('/app');
+        }
       } else {
         navigate('/app');
       }

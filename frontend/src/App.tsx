@@ -15,10 +15,12 @@ import { InsightsPage } from './pages/insights/InsightsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { AdminPage } from './pages/admin/AdminPage';
 import { PublicLoyaltyPage } from './pages/public/PublicLoyaltyPage';
+import { WaitingPage } from './pages/onboarding/WaitingPage';
+import { WhatsAppOnboardingPage } from './pages/onboarding/WhatsAppOnboardingPage';
 
-// Protected Route Guard
+// Protected Route Guard — routes based on tenant onboarding status
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { token, isLoading } = useAuth();
+  const { token, isLoading, tenant } = useAuth();
   if (isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0B0F19', color: '#9CA3AF' }}>
@@ -29,6 +31,46 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (!token) {
     return <Navigate to="/login" replace />;
   }
+
+  // Route based on tenant onboarding status
+  const tenantStatus = tenant?.status;
+  if (tenantStatus === 'PENDING_APPROVAL' || tenantStatus === 'REJECTED') {
+    return <Navigate to="/waiting" replace />;
+  }
+  if (tenantStatus === 'APPROVED') {
+    return <Navigate to="/onboarding/whatsapp" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Onboarding Route Guard — only for pending/approved tenants
+const OnboardingRoute: React.FC<{ children: React.ReactNode; allowedStatuses: string[] }> = ({ children, allowedStatuses }) => {
+  const { token, isLoading, tenant } = useAuth();
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0B0F19', color: '#9CA3AF' }}>
+        Loading...
+      </div>
+    );
+  }
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const tenantStatus = tenant?.status;
+  if (tenantStatus === 'ACTIVE') {
+    return <Navigate to="/app" replace />;
+  }
+  if (tenantStatus && !allowedStatuses.includes(tenantStatus)) {
+    if (tenantStatus === 'PENDING_APPROVAL' || tenantStatus === 'REJECTED') {
+      return <Navigate to="/waiting" replace />;
+    }
+    if (tenantStatus === 'APPROVED') {
+      return <Navigate to="/onboarding/whatsapp" replace />;
+    }
+  }
+
   return <>{children}</>;
 };
 
@@ -54,6 +96,24 @@ export const App: React.FC = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
+          {/* Onboarding Flow */}
+          <Route
+            path="/waiting"
+            element={
+              <OnboardingRoute allowedStatuses={['PENDING_APPROVAL', 'REJECTED']}>
+                <WaitingPage />
+              </OnboardingRoute>
+            }
+          />
+          <Route
+            path="/onboarding/whatsapp"
+            element={
+              <OnboardingRoute allowedStatuses={['APPROVED']}>
+                <WhatsAppOnboardingPage />
+              </OnboardingRoute>
+            }
+          />
+
           {/* Platform Super Admin */}
           <Route
             path="/admin"
@@ -64,7 +124,7 @@ export const App: React.FC = () => {
             }
           />
 
-          {/* Merchant Application */}
+          {/* Merchant Application — only for ACTIVE tenants */}
           <Route
             path="/app"
             element={
@@ -93,3 +153,4 @@ export const App: React.FC = () => {
 };
 
 export default App;
+
