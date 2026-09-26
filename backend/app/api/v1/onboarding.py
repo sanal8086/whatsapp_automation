@@ -58,6 +58,20 @@ def get_onboarding_status(
     }
 
 
+from pydantic import BaseModel
+from typing import Optional
+from app.services.whatsapp_service import WhatsAppService
+
+class WhatsAppSignupCompleteRequest(BaseModel):
+    code: Optional[str] = None
+    waba_id: Optional[str] = None
+    phone_number_id: Optional[str] = None
+    display_phone_number: Optional[str] = None
+    verified_name: Optional[str] = None
+    is_sandbox_simulation: Optional[bool] = False
+    redirect_uri: Optional[str] = None
+
+
 @router.post("/whatsapp-signup/start")
 def start_whatsapp_signup(
     current_user: User = Depends(get_current_user),
@@ -113,19 +127,24 @@ def start_whatsapp_signup(
         "app_id": settings.META_APP_ID,
         "config_id": settings.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID or "",
         "graph_version": settings.META_GRAPH_API_VERSION,
+        "use_live_whatsapp": settings.USE_LIVE_WHATSAPP,
+        "is_mock_app": settings.META_APP_ID.startswith("mock_")
     }
 
 
 @router.post("/whatsapp-signup/complete")
 def complete_whatsapp_signup(
+    req: Optional[WhatsAppSignupCompleteRequest] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    MOCK endpoint — simulates completing the WhatsApp Embedded Signup.
-    In production, this would receive the OAuth callback code from Meta
-    and exchange it for WABA credentials. Here we generate mock data.
+    Completes WhatsApp Embedded Signup.
+    Exchanges Meta OAuth authorization code for system user token,
+    registers the merchant WABA and phone number on WhatsApp Cloud API,
+    subscribes webhooks, and transitions tenant to ACTIVE.
     """
+    req = req or WhatsAppSignupCompleteRequest()
     membership = db.query(TenantMember).filter(
         TenantMember.user_id == current_user.id,
         TenantMember.status == "ACTIVE"
@@ -160,65 +179,35 @@ def complete_whatsapp_signup(
             db.commit()
             raise HTTPException(status_code=400, detail="Session expired. Please restart the signup process.")
 
-    # --- MOCK: Generate fake WhatsApp credentials ---
-    mock_waba_id = f"waba_{uuid.uuid4().hex[:12]}"
-    mock_phone_number_id = f"pn_{uuid.uuid4().hex[:12]}"
-    mock_meta_business_id = f"mb_{uuid.uuid4().hex[:12]}"
-    mock_display_phone = f"+91 {uuid.uuid4().int % 9000000000 + 1000000000}"
+    # Delegate to WhatsAppService for real Meta Cloud API registration & activation
+    conn = WhatsAppService.exchange_and_connect_embedded_signup(
+        db=db,
+        tenant_id=tenant.id,
+        code=req.code,
+        waba_id=req.waba_id,
+        phone_number_id=req.phone_number_id,
+        display_phone_number=req.display_phone_number,
+        verified_name=req.verified_name,
+        is_sandbox_simulation=bool(req.is_sandbox_simulation),
+        redirect_uri=req.redirect_uri
+    )
 
-    # Update onboarding session
+    # Update session to COMPLETED
     session.status = "COMPLETED"
-    session.waba_id = mock_waba_id
-    session.phone_number_id = mock_phone_number_id
-    session.meta_business_id = mock_meta_business_id
+    session.waba_id = conn.waba_id
+    session.phone_number_id = conn.phone_number_id
     session.completed_at = datetime.now(timezone.utc)
-
-    # Create or update the WhatsApp connection for this tenant
-    conn = db.query(WhatsAppConnection).filter(
-        WhatsAppConnection.tenant_id == tenant.id
-    ).first()
-
-    if conn:
-        conn.meta_business_id = mock_meta_business_id
-        conn.waba_id = mock_waba_id
-        conn.phone_number_id = mock_phone_number_id
-        conn.display_phone_number = mock_display_phone
-        conn.verified_name = tenant.name
-        conn.connection_status = "CONNECTED"
-        conn.access_token_encrypted = f"mock_encrypted_token_{uuid.uuid4().hex[:16]}"
-        conn.connected_at = datetime.now(timezone.utc)
-    else:
-        conn = WhatsAppConnection(
-            tenant_id=tenant.id,
-            meta_business_id=mock_meta_business_id,
-            waba_id=mock_waba_id,
-            phone_number_id=mock_phone_number_id,
-            display_phone_number=mock_display_phone,
-            verified_name=tenant.name,
-            connection_status="CONNECTED",
-            business_verification_status="VERIFIED",
-            phone_verification_status="VERIFIED",
-            access_token_encrypted=f"mock_encrypted_token_{uuid.uuid4().hex[:16]}",
-            is_live_mode=False,
-            quality_rating="GREEN",
-            connected_at=datetime.now(timezone.utc)
-        )
-        db.add(conn)
-
-    # Transition tenant to ACTIVE — onboarding is fully complete
-    tenant.status = "ACTIVE"
-
     db.commit()
-    db.refresh(tenant)
 
     return {
         "status": "success",
         "tenant_status": tenant.status,
+        "is_live_mode": conn.is_live_mode,
         "whatsapp": {
-            "waba_id": mock_waba_id,
-            "phone_number_id": mock_phone_number_id,
-            "display_phone_number": mock_display_phone,
-            "verified_name": tenant.name,
-            "connection_status": "CONNECTED"
+            "waba_id": conn.waba_id,
+            "phone_number_id": conn.phone_number_id,
+            "display_phone_number": conn.display_phone_number,
+            "verified_name": conn.verified_name,
+            "connection_status": conn.connection_status
         }
     }

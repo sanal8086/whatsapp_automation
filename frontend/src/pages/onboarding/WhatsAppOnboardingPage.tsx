@@ -1,87 +1,302 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, CheckCircle2, ArrowRight, Loader2, Phone, Building2, Shield, Zap } from 'lucide-react';
+import {
+  MessageSquare,
+  CheckCircle2,
+  ArrowRight,
+  Loader2,
+  Phone,
+  Building2,
+  Shield,
+  Zap,
+  ExternalLink,
+  AlertCircle,
+  HelpCircle,
+  Check,
+  Globe
+} from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 
-type Step = 'intro' | 'permissions' | 'phone-verify' | 'connecting' | 'success';
+declare global {
+  interface Window {
+    FB?: any;
+    fbAsyncInit?: () => void;
+  }
+}
 
-interface MockResult {
+type OnboardingStep = 'ready' | 'authenticating' | 'processing' | 'success';
+
+interface WhatsAppResult {
   waba_id: string;
   phone_number_id: string;
   display_phone_number: string;
   verified_name: string;
   connection_status: string;
+  is_live_mode?: boolean;
+}
+
+interface SignupConfig {
+  session_id: string;
+  state: string;
+  app_id: string;
+  config_id: string;
+  graph_version: string;
+  use_live_whatsapp: boolean;
+  is_mock_app: boolean;
 }
 
 export const WhatsAppOnboardingPage: React.FC = () => {
   const navigate = useNavigate();
   const { tenant, login, token, user } = useAuth();
-  const [step, setStep] = useState<Step>('intro');
+
+  const [step, setStep] = useState<OnboardingStep>('ready');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<MockResult | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>('Preparing Meta connection...');
+  const [config, setConfig] = useState<SignupConfig | null>(null);
+  const [result, setResult] = useState<WhatsAppResult | null>(null);
 
-  const startSignup = async () => {
+  // Captured IDs from Meta postMessage event listener
+  const capturedWabaIdRef = useRef<string | null>(null);
+  const capturedPhoneIdRef = useRef<string | null>(null);
+  const codeHandledRef = useRef<boolean>(false);
+
+  // Step 1: Start onboarding session & fetch Meta App configuration
+  const fetchConfig = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Step 1: Start the session
-      await apiRequest('/onboarding/whatsapp-signup/start', { method: 'POST' });
-      setStep('permissions');
+      const data = await apiRequest<SignupConfig>('/onboarding/whatsapp-signup/start', { method: 'POST' });
+      setConfig(data);
+
+      // Load official Facebook JS SDK if real App ID is provided
+      if (data.app_id && !data.is_mock_app) {
+        initFacebookSdk(data.app_id, data.graph_version || 'v22.0');
+      }
+
+      // Check if user was redirected back from Meta-hosted Embedded Signup landing page
+      const searchParams = new URLSearchParams(window.location.search);
+      const returnedCode = searchParams.get('code');
+      const returnedError = searchParams.get('error') || searchParams.get('error_description');
+
+      if (returnedError) {
+        setError(`Meta Authorization Error: ${returnedError}`);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (returnedCode && !codeHandledRef.current) {
+        codeHandledRef.current = true;
+        // Clean URL query params so reload doesn't re-trigger expired code
+        window.history.replaceState({}, document.title, window.location.pathname);
+        const redirectUri = window.location.origin + window.location.pathname;
+        handleCompleteSignup({
+          code: returnedCode,
+          redirect_uri: redirectUri,
+          is_sandbox_simulation: false,
+        });
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to start WhatsApp signup');
+      setError(err.message || 'Failed to initialize WhatsApp onboarding session');
     } finally {
       setLoading(false);
     }
   };
 
-  const grantPermissions = () => {
-    setStep('phone-verify');
+  useEffect(() => {
+    fetchConfig();
+  }, []);
+
+  // Initialize official Facebook JavaScript SDK
+  const initFacebookSdk = (appId: string, version: string) => {
+    if (window.FB) {
+      try {
+        window.FB.init({
+          appId,
+          autoLogAppEvents: true,
+          xfbml: true,
+          version,
+        });
+      } catch (e) {
+        console.warn('FB.init error:', e);
+      }
+      return;
+    }
+
+    window.fbAsyncInit = () => {
+      window.FB.init({
+        appId,
+        autoLogAppEvents: true,
+        xfbml: true,
+        version,
+      });
+    };
+
+    const existingScript = document.getElementById('facebook-jssdk');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.id = 'facebook-jssdk';
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      document.body.appendChild(script);
+    }
   };
 
-  const verifyPhone = () => {
-    setStep('connecting');
-    // Simulate a 3s connection process
-    setTimeout(async () => {
-      try {
-        const data = await apiRequest<{
-          status: string;
-          tenant_status: string;
-          whatsapp: MockResult;
-        }>('/onboarding/whatsapp-signup/complete', { method: 'POST' });
-
-        setResult(data.whatsapp);
-        setStep('success');
-
-        // Update auth context with ACTIVE tenant
-        if (token && user && tenant) {
-          login(token, user, {
-            ...tenant,
-            status: data.tenant_status,
-          });
-        }
-      } catch (err: any) {
-        setError(err.message || 'WhatsApp connection failed');
-        setStep('intro');
+  // Step 2: Set up Meta postMessage event listener (sessionInfoListener)
+  useEffect(() => {
+    const handleMetaMessage = (event: MessageEvent) => {
+      // Validate origin from Meta domains
+      if (
+        event.origin !== 'https://www.facebook.com' &&
+        event.origin !== 'https://web.facebook.com'
+      ) {
+        return;
       }
-    }, 3000);
+
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+
+        // Meta Embedded Signup event triggers
+        if (
+          data?.type === 'WA_EMBEDDED_SIGNUP' ||
+          data?.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' ||
+          data?.event === 'WA_EMBEDDED_SIGNUP_FINISH' ||
+          data?.data?.type === 'whatsapp_embedded_signup'
+        ) {
+          const payload = data.data || data;
+          if (payload.waba_id) {
+            capturedWabaIdRef.current = payload.waba_id;
+          }
+          if (payload.phone_number_id) {
+            capturedPhoneIdRef.current = payload.phone_number_id;
+          }
+        }
+      } catch {
+        // Ignore non-JSON postMessages from extensions or frames
+      }
+    };
+
+    window.addEventListener('message', handleMetaMessage);
+    return () => window.removeEventListener('message', handleMetaMessage);
+  }, []);
+
+  // Construct official Meta-hosted landing page OAuth URL
+  const getMetaHostedUrl = () => {
+    if (!config) return '#';
+    const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+    const graphVersion = config.graph_version || 'v22.0';
+    let url = `https://www.facebook.com/${graphVersion}/dialog/oauth?client_id=${config.app_id}&redirect_uri=${redirectUri}&response_type=code&state=${config.state}`;
+    if (config.config_id) {
+      url += `&config_id=${config.config_id}`;
+    }
+    return url;
+  };
+
+  // Step 3: Launch real Meta Embedded Signup via FB.login popup
+  const handleLaunchMetaSignup = () => {
+    setError(null);
+
+    // If still in mock mode or FB SDK not loaded, advise or fallback
+    if (!config || config.is_mock_app || !window.FB) {
+      if (config?.is_mock_app) {
+        handleCompleteSignup({ is_sandbox_simulation: true });
+        return;
+      }
+      setError('Facebook JavaScript SDK is still loading. Please try again in a few seconds or use the Meta-Hosted page.');
+      return;
+    }
+
+    setStep('authenticating');
+    setStatusMessage('Connecting to Meta Embedded Signup dialog...');
+
+    const fbLoginOptions: Record<string, any> = {
+      response_type: 'code',
+      override_default_response_type: true,
+      extras: {
+        feature: 'whatsapp_embedded_signup',
+        version: 2,
+        sessionInfoVersion: 3,
+      },
+    };
+
+    if (config.config_id) {
+      fbLoginOptions.config_id = config.config_id;
+    }
+
+    try {
+      window.FB.login((response: any) => {
+        if (response.authResponse && response.authResponse.code) {
+          // Authorization code received from Meta popup
+          setStep('processing');
+          setStatusMessage('Exchanging authorization code with Meta Graph API...');
+          handleCompleteSignup({
+            code: response.authResponse.code,
+            waba_id: capturedWabaIdRef.current || undefined,
+            phone_number_id: capturedPhoneIdRef.current || undefined,
+            is_sandbox_simulation: false,
+          });
+        } else {
+          // Merchant closed popup or denied permission
+          setStep('ready');
+          setError('WhatsApp Embedded Signup was closed or cancelled. Please try again.');
+        }
+      }, fbLoginOptions);
+    } catch (e: any) {
+      setStep('ready');
+      setError(e.message || 'Failed to open Meta popup. Please check your browser pop-up blocker.');
+    }
+  };
+
+  // Step 4: Complete signup on backend (Exchanging code, registering phone & subscribing webhooks)
+  const handleCompleteSignup = async (payload: {
+    code?: string;
+    waba_id?: string;
+    phone_number_id?: string;
+    is_sandbox_simulation?: boolean;
+    redirect_uri?: string;
+  }) => {
+    setStep('processing');
+    setStatusMessage(
+      payload.is_sandbox_simulation
+        ? 'Registering sandbox WABA and activating merchant account...'
+        : 'Registering phone number & subscribing Meta Cloud API webhooks...'
+    );
+
+    try {
+      const data = await apiRequest<{
+        status: string;
+        tenant_status: string;
+        is_live_mode: boolean;
+        whatsapp: WhatsAppResult;
+      }>('/onboarding/whatsapp-signup/complete', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      setResult({
+        ...data.whatsapp,
+        is_live_mode: data.is_live_mode,
+      });
+      setStep('success');
+
+      // Update auth context with ACTIVE status
+      if (token && user && tenant) {
+        login(token, user, {
+          ...tenant,
+          status: data.tenant_status,
+        });
+      }
+    } catch (err: any) {
+      setError(err.message || 'WhatsApp connection and registration failed');
+      setStep('ready');
+    }
   };
 
   const goToDashboard = () => {
     navigate('/app');
   };
 
-  // Step configurations
-  const steps: { key: Step; label: string }[] = [
-    { key: 'intro', label: 'Get Started' },
-    { key: 'permissions', label: 'Permissions' },
-    { key: 'phone-verify', label: 'Phone' },
-    { key: 'connecting', label: 'Connecting' },
-    { key: 'success', label: 'Done' },
-  ];
-
-  const currentStepIndex = steps.findIndex(s => s.key === step);
+  const isLiveConfigured = config && !config.is_mock_app;
 
   return (
     <div
@@ -92,133 +307,182 @@ export const WhatsAppOnboardingPage: React.FC = () => {
         justifyContent: 'center',
         backgroundColor: 'var(--bg-main)',
         backgroundImage:
-          'radial-gradient(circle at 50% 0%, rgba(37, 211, 102, 0.12) 0%, transparent 55%)',
+          'radial-gradient(circle at 50% 0%, rgba(37, 211, 102, 0.12) 0%, transparent 60%)',
         padding: '24px',
       }}
     >
-      <div style={{ width: '100%', maxWidth: '560px' }}>
+      <div style={{ width: '100%', maxWidth: '580px' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <div
             style={{
-              width: '68px',
-              height: '68px',
-              borderRadius: '20px',
-              background: step === 'success'
-                ? 'var(--emerald-gradient)'
-                : 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+              width: '70px',
+              height: '70px',
+              borderRadius: '22px',
+              background:
+                step === 'success'
+                  ? 'var(--emerald-gradient)'
+                  : 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: '16px',
-              boxShadow: '0 0 30px rgba(37, 211, 102, 0.3)',
+              boxShadow: '0 0 35px rgba(37, 211, 102, 0.35)',
             }}
           >
             {step === 'success' ? (
-              <CheckCircle2 size={34} color="#fff" />
+              <CheckCircle2 size={36} color="#fff" />
             ) : (
-              <MessageSquare size={34} color="#fff" />
+              <MessageSquare size={36} color="#fff" />
             )}
           </div>
           <h1
             style={{
-              fontSize: '1.75rem',
+              fontSize: '1.8rem',
               fontWeight: 800,
               letterSpacing: '-0.03em',
               color: 'var(--text-main)',
             }}
           >
-            {step === 'success' ? 'WhatsApp Connected!' : 'Connect WhatsApp Business'}
+            {step === 'success' ? 'WhatsApp Business Active!' : 'Connect WhatsApp Cloud API'}
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '6px' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: '6px' }}>
             {step === 'success'
-              ? 'Your WhatsApp Business account is ready to go'
-              : `Connect your WhatsApp Business number to ${tenant?.name || 'your business'}`}
+              ? 'Your official Meta WhatsApp Cloud API integration is live and ready.'
+              : `Link your verified WhatsApp Business phone number for ${tenant?.name || 'your store'}.`}
           </p>
         </div>
 
-        {/* Progress Steps */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            marginBottom: '24px',
-          }}
-        >
-          {steps.map((s, i) => (
-            <React.Fragment key={s.key}>
-              <div
-                style={{
-                  width: '10px',
-                  height: '10px',
-                  borderRadius: '50%',
-                  background:
-                    i < currentStepIndex
-                      ? 'var(--success)'
-                      : i === currentStepIndex
-                      ? '#25D366'
-                      : 'var(--bg-surface-elevated)',
-                  transition: 'all 0.3s ease',
-                  boxShadow:
-                    i === currentStepIndex ? '0 0 8px rgba(37, 211, 102, 0.5)' : 'none',
-                }}
-              />
-              {i < steps.length - 1 && (
-                <div
+        {/* Environment Badges */}
+        {config && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              marginBottom: '18px',
+            }}
+          >
+            {isLiveConfigured ? (
+              <>
+                <span
+                  className="badge badge-success"
                   style={{
-                    width: '32px',
-                    height: '2px',
-                    background:
-                      i < currentStepIndex
-                        ? 'var(--success)'
-                        : 'var(--bg-surface-elevated)',
-                    transition: 'background 0.3s ease',
+                    padding: '5px 12px',
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
                   }}
-                />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
+                >
+                  <Globe size={13} />
+                  App ID: {config.app_id}
+                </span>
+
+                <span
+                  className={`badge ${config.config_id ? 'badge-success' : 'badge-warning'}`}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Shield size={13} />
+                  Config ID: {config.config_id || 'Not Set in .env'}
+                </span>
+              </>
+            ) : (
+              <span
+                className="badge badge-warning"
+                style={{
+                  padding: '5px 12px',
+                  fontSize: '0.78rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Zap size={13} />
+                Sandbox / Developer Mode (Configure META_APP_ID & CONFIG_ID in .env)
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Main Card */}
         <div className="glass-panel" style={{ padding: '32px' }}>
           {error && (
             <div
               style={{
-                backgroundColor: 'var(--danger-bg)',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
                 color: 'var(--danger)',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
-                padding: '12px 16px',
-                borderRadius: '10px',
-                fontSize: '0.85rem',
+                padding: '14px 18px',
+                borderRadius: '12px',
+                fontSize: '0.875rem',
                 marginBottom: '20px',
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'flex-start',
               }}
             >
-              {error}
+              <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: 700 }}>Connection Notice</div>
+                <div style={{ fontSize: '0.82rem', marginTop: '2px', lineHeight: '1.4' }}>{error}</div>
+              </div>
             </div>
           )}
 
-          {/* Step: Intro */}
-          {step === 'intro' && (
+          {/* Config ID notice if using live app but config_id is missing */}
+          {isLiveConfigured && !config?.config_id && (
+            <div
+              style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                padding: '12px 16px',
+                borderRadius: '10px',
+                fontSize: '0.82rem',
+                color: '#F59E0B',
+                marginBottom: '18px',
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'center',
+              }}
+            >
+              <HelpCircle size={18} style={{ flexShrink: 0 }} />
+              <div>
+                <strong>Meta Config ID recommended:</strong> Create a Configuration in Meta Developer Portal under{' '}
+                <em>Facebook Login for Business &gt; Configurations</em> and paste it into{' '}
+                <code style={{ color: '#fff' }}>WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID</code> in{' '}
+                <code style={{ color: '#fff' }}>backend/.env</code>.
+              </div>
+            </div>
+          )}
+
+          {/* STEP: READY */}
+          {step === 'ready' && (
             <div className="animate-fade-in">
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '22px' }}>
                 {[
                   {
-                    icon: <MessageSquare size={18} color="#25D366" />,
-                    title: 'Send Campaigns',
-                    desc: 'Reach your customers with targeted WhatsApp marketing campaigns',
+                    icon: <Shield size={18} color="#25D366" />,
+                    title: 'Official Meta Cloud API',
+                    desc: 'Direct server-to-server connection using Meta Graph API v22.0',
                   },
                   {
                     icon: <Zap size={18} color="#F59E0B" />,
-                    title: 'Automate Messages',
-                    desc: 'Birthday wishes, welcome messages, and loyalty updates — automated',
+                    title: 'Automated 2-Way Webhooks',
+                    desc: 'Instant delivery receipts, read ticks, and customer inbound replies',
                   },
                   {
-                    icon: <Shield size={18} color="#6366F1" />,
-                    title: 'Verified Business',
-                    desc: 'Get a verified green badge on WhatsApp for your business number',
+                    icon: <MessageSquare size={18} color="#6366F1" />,
+                    title: 'Pre-Approved Loyalty Templates',
+                    desc: 'Instant point alerts, welcome bonuses, and birthday reward triggers',
                   },
                 ].map((feature, i) => (
                   <div
@@ -227,7 +491,7 @@ export const WhatsAppOnboardingPage: React.FC = () => {
                       display: 'flex',
                       gap: '14px',
                       padding: '14px',
-                      marginBottom: '8px',
+                      marginBottom: '10px',
                       borderRadius: '12px',
                       background: 'rgba(255, 255, 255, 0.03)',
                       border: '1px solid var(--border-subtle)',
@@ -266,271 +530,181 @@ export const WhatsAppOnboardingPage: React.FC = () => {
                 ))}
               </div>
 
-              <button
-                onClick={startSignup}
-                disabled={loading}
-                className="btn btn-whatsapp"
-                style={{ width: '100%', padding: '14px', fontSize: '0.95rem' }}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                    Starting...
-                  </>
-                ) : (
-                  <>
-                    <MessageSquare size={18} />
-                    Connect with WhatsApp
-                    <ArrowRight size={16} />
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* Step: Permissions (Mock Meta dialog) */}
-          {step === 'permissions' && (
-            <div className="animate-fade-in">
-              <div
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '14px',
-                  padding: '24px',
-                  marginBottom: '20px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    marginBottom: '18px',
-                    paddingBottom: '14px',
-                    borderBottom: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  <div
+              {/* Action Buttons */}
+              {isLiveConfigured ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Option 1: In-Page SDK Popup */}
+                  <button
+                    onClick={handleLaunchMetaSignup}
+                    disabled={loading}
+                    className="btn"
                     style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '8px',
-                      background: '#1877F2',
+                      width: '100%',
+                      padding: '14px',
+                      fontSize: '0.95rem',
+                      background: 'linear-gradient(135deg, #1877F2 0%, #0C63D4 100%)',
+                      color: '#fff',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 16px rgba(24, 119, 242, 0.4)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      gap: '10px',
                     }}
                   >
-                    <span style={{ color: '#fff', fontWeight: 800, fontSize: '1rem' }}>f</span>
-                  </div>
-                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                    Meta Business Permissions
-                  </span>
-                </div>
+                    <span style={{ fontWeight: 900, fontSize: '1.1rem' }}>f</span>
+                    Launch Meta Embedded Popup
+                    <ExternalLink size={16} />
+                  </button>
 
-                <p
-                  style={{
-                    fontSize: '0.85rem',
-                    color: 'var(--text-muted)',
-                    marginBottom: '16px',
-                    lineHeight: '1.5',
-                  }}
-                >
-                  <strong style={{ color: 'var(--text-main)' }}>GoAgain</strong> is requesting access
-                  to your Meta Business portfolio to:
-                </p>
-
-                {[
-                  'Create or link a WhatsApp Business Account',
-                  'Register a phone number for WhatsApp Cloud API',
-                  'Manage message templates on your behalf',
-                  'Send and receive messages via Cloud API',
-                ].map((perm, i) => (
-                  <div
-                    key={i}
+                  {/* Option 2: Meta-Hosted Landing Page / OAuth Dialog */}
+                  <a
+                    href={getMetaHostedUrl()}
+                    className="btn btn-secondary"
                     style={{
+                      width: '100%',
+                      padding: '12px',
+                      fontSize: '0.88rem',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '10px',
-                      padding: '8px 0',
-                      fontSize: '0.825rem',
-                      color: 'var(--text-main)',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      textDecoration: 'none',
                     }}
                   >
-                    <CheckCircle2 size={16} color="#25D366" />
-                    {perm}
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={() => setStep('intro')}
-                  className="btn btn-secondary"
-                  style={{ flex: 1, padding: '12px' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={grantPermissions}
-                  className="btn btn-whatsapp"
-                  style={{ flex: 2, padding: '12px' }}
-                >
-                  Allow Access
-                  <ArrowRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step: Phone Verification (Mock) */}
-          {step === 'phone-verify' && (
-            <div className="animate-fade-in">
-              <div
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '14px',
-                  padding: '24px',
-                  marginBottom: '20px',
-                  textAlign: 'center',
-                }}
-              >
-                <div
-                  style={{
-                    width: '56px',
-                    height: '56px',
-                    borderRadius: '50%',
-                    background: 'var(--whatsapp-bg)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: '14px',
-                  }}
-                >
-                  <Phone size={26} color="#25D366" />
+                    <Globe size={16} />
+                    Open Meta-Hosted Signup Page (Direct URL)
+                    <ArrowRight size={14} />
+                  </a>
                 </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    onClick={() => handleCompleteSignup({ is_sandbox_simulation: true })}
+                    disabled={loading}
+                    className="btn btn-whatsapp"
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      fontSize: '0.95rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={18} />
+                        Connect Sandbox Simulation
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
 
-                <h3
-                  style={{
-                    fontSize: '1.1rem',
-                    fontWeight: 700,
-                    color: 'var(--text-main)',
-                    marginBottom: '8px',
-                  }}
-                >
-                  Verify Your Business Phone
-                </h3>
-                <p
-                  style={{
-                    fontSize: '0.85rem',
-                    color: 'var(--text-muted)',
-                    marginBottom: '18px',
-                    lineHeight: '1.5',
-                  }}
-                >
-                  In production, Meta will send an OTP to your business phone number.
-                  <br />
-                  <span style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '0.75rem' }}>
-                    MOCK MODE — Click below to simulate verification
-                  </span>
-                </p>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    marginBottom: '18px',
-                  }}
-                >
-                  {['4', '2', '9', '7', '1', '6'].map((digit, i) => (
-                    <div
-                      key={i}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      onClick={handleLaunchMetaSignup}
+                      className="btn btn-secondary"
+                      style={{ padding: '10px', fontSize: '0.8rem' }}
+                      title="Attempts Meta popup with current App ID"
+                    >
+                      Test Meta Popup
+                    </button>
+                    <a
+                      href={getMetaHostedUrl()}
+                      className="btn btn-secondary"
                       style={{
-                        width: '42px',
-                        height: '50px',
-                        borderRadius: '10px',
-                        background: 'var(--bg-surface-elevated)',
-                        border: '1px solid var(--border-subtle)',
+                        padding: '10px',
+                        fontSize: '0.8rem',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.2rem',
-                        fontWeight: 700,
-                        color: 'var(--whatsapp)',
-                        fontFamily: 'monospace',
+                        gap: '6px',
+                        textDecoration: 'none',
                       }}
+                      title="Opens direct Meta-hosted OAuth landing page"
                     >
-                      {digit}
-                    </div>
-                  ))}
+                      <Globe size={13} />
+                      Meta-Hosted Page
+                    </a>
+                  </div>
                 </div>
-              </div>
-
-              <button
-                onClick={verifyPhone}
-                className="btn btn-whatsapp"
-                style={{ width: '100%', padding: '14px', fontSize: '0.95rem' }}
-              >
-                <Shield size={18} />
-                Verify & Connect
-                <ArrowRight size={16} />
-              </button>
+              )}
             </div>
           )}
 
-          {/* Step: Connecting */}
-          {step === 'connecting' && (
-            <div className="animate-fade-in" style={{ textAlign: 'center', padding: '32px 0' }}>
+          {/* STEP: AUTHENTICATING / PROCESSING */}
+          {(step === 'authenticating' || step === 'processing') && (
+            <div className="animate-fade-in" style={{ textAlign: 'center', padding: '36px 0' }}>
               <div
                 style={{
-                  width: '64px',
-                  height: '64px',
+                  width: '68px',
+                  height: '68px',
                   borderRadius: '50%',
                   border: '3px solid var(--border-subtle)',
                   borderTopColor: '#25D366',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: '20px',
+                  marginBottom: '22px',
                   animation: 'spin 1s linear infinite',
                 }}
               />
               <h3
                 style={{
-                  fontSize: '1.15rem',
+                  fontSize: '1.2rem',
                   fontWeight: 700,
                   color: 'var(--text-main)',
                   marginBottom: '8px',
                 }}
               >
-                Connecting Your Account...
+                {step === 'authenticating'
+                  ? 'Waiting for Meta Authorization'
+                  : 'Registering WhatsApp Cloud API'}
               </h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                Registering your phone number and setting up WhatsApp Cloud API.
-                <br />
-                This usually takes a few seconds.
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                {statusMessage}
               </p>
             </div>
           )}
 
-          {/* Step: Success */}
+          {/* STEP: SUCCESS */}
           {step === 'success' && result && (
             <div className="animate-fade-in">
               <div
                 style={{
                   background: 'rgba(37, 211, 102, 0.08)',
-                  border: '1px solid rgba(37, 211, 102, 0.25)',
+                  border: '1px solid rgba(37, 211, 102, 0.3)',
                   borderRadius: '14px',
                   padding: '24px',
-                  marginBottom: '20px',
+                  marginBottom: '22px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                  <CheckCircle2 size={22} color="#25D366" />
-                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#25D366' }}>
-                    Successfully Connected
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={22} color="#25D366" />
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#25D366' }}>
+                      Connection Established
+                    </span>
+                  </div>
+                  <span
+                    className={`badge ${result.is_live_mode ? 'badge-success' : 'badge-neutral'}`}
+                    style={{ fontSize: '0.7rem' }}
+                  >
+                    {result.is_live_mode ? 'LIVE META CLOUD' : 'SANDBOX SIMULATED'}
                   </span>
                 </div>
 
@@ -538,7 +712,8 @@ export const WhatsAppOnboardingPage: React.FC = () => {
                   { label: 'Business Name', value: result.verified_name, icon: <Building2 size={14} /> },
                   { label: 'Phone Number', value: result.display_phone_number, icon: <Phone size={14} /> },
                   { label: 'WABA ID', value: result.waba_id, icon: <Shield size={14} /> },
-                  { label: 'Status', value: result.connection_status, icon: <Zap size={14} /> },
+                  { label: 'Phone Number ID', value: result.phone_number_id, icon: <Zap size={14} /> },
+                  { label: 'Connection Status', value: result.connection_status, icon: <Check size={14} /> },
                 ].map((item, i) => (
                   <div
                     key={i}
@@ -547,7 +722,7 @@ export const WhatsAppOnboardingPage: React.FC = () => {
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       padding: '8px 0',
-                      borderBottom: i < 3 ? '1px solid rgba(37, 211, 102, 0.12)' : 'none',
+                      borderBottom: i < 4 ? '1px solid rgba(37, 211, 102, 0.12)' : 'none',
                     }}
                   >
                     <span
@@ -567,7 +742,8 @@ export const WhatsAppOnboardingPage: React.FC = () => {
                         fontSize: '0.8rem',
                         fontWeight: 600,
                         color: 'var(--text-main)',
-                        fontFamily: item.label === 'WABA ID' ? 'monospace' : 'inherit',
+                        fontFamily:
+                          item.label.includes('ID') ? 'monospace' : 'inherit',
                       }}
                     >
                       {item.value}
@@ -579,14 +755,29 @@ export const WhatsAppOnboardingPage: React.FC = () => {
               <button
                 onClick={goToDashboard}
                 className="btn btn-primary"
-                style={{ width: '100%', padding: '14px', fontSize: '0.95rem' }}
+                style={{ width: '100%', padding: '14px', fontSize: '0.95rem', fontWeight: 700 }}
               >
-                Go to Dashboard
+                Launch Merchant Dashboard
                 <ArrowRight size={16} />
               </button>
             </div>
           )}
         </div>
+
+        {/* Footer help note */}
+        <p
+          style={{
+            textAlign: 'center',
+            marginTop: '20px',
+            fontSize: '0.78rem',
+            color: 'var(--text-dim)',
+          }}
+        >
+          Need to update your Meta Cloud API credentials? You can configure your{' '}
+          <code style={{ color: 'var(--text-muted)' }}>META_APP_ID</code> and{' '}
+          <code style={{ color: 'var(--text-muted)' }}>META_APP_SECRET</code> in the backend{' '}
+          <code style={{ color: 'var(--text-muted)' }}>.env</code> file anytime.
+        </p>
       </div>
 
       <style>{`
