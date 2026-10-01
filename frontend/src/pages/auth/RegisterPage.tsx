@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Award, Lock, Mail, User, Building, ArrowRight } from 'lucide-react';
+import { Hexagon, Lock, Mail, User, Building, ArrowRight } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 
@@ -51,36 +51,60 @@ export const RegisterPage: React.FC = () => {
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'var(--bg-body)',
-        backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(100, 211, 231, 0.12) 0%, transparent 60%)',
+        backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(100, 211, 231, 0.15) 0%, transparent 60%)',
         padding: '32px 24px',
       }}
     >
-      <div style={{ width: '100%', maxWidth: '480px' }}>
+      <div style={{ width: '100%', maxWidth: '460px' }}>
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div
             style={{
-              width: '54px',
-              height: '54px',
-              borderRadius: '16px',
-              background: 'var(--primary-gradient)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: 'var(--shadow-md)',
-              marginBottom: '16px',
+              width: 48,
+              height: 48,
+              borderRadius: 14,
+              background: 'linear-gradient(135deg, #64d3e7 0%, #a8e7ee 100%)',
+              display: 'inline-grid',
+              placeItems: 'center',
+              boxShadow: '0 8px 24px rgba(100, 211, 231, 0.32)',
+              marginBottom: 16,
             }}
           >
-            <Award size={30} color="#fff" />
+            <Hexagon size={24} color="#202020" />
           </div>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-main)' }}>
+          <h1
+            style={{
+              fontSize: '30px',
+              fontWeight: 500,
+              letterSpacing: '-1.1px',
+              lineHeight: 1.15,
+              color: 'var(--text-main)',
+              margin: 0,
+            }}
+          >
             Start Your Loyalty Program
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '6px' }}>
+          </h1>
+          <p
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: '13.5px',
+              lineHeight: 1.45,
+              marginTop: '8px',
+              fontWeight: 400,
+            }}
+          >
             Instant setup with 14-day free trial & ₹250 free WhatsApp credits
           </p>
         </div>
 
-        <div className="card" style={{ padding: '32px', boxShadow: 'var(--shadow-lg)' }}>
+        <div
+          style={{
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: '28px',
+            padding: '36px 32px',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)',
+          }}
+        >
           {error && (
             <div
               style={{
@@ -88,8 +112,8 @@ export const RegisterPage: React.FC = () => {
                 color: 'var(--danger)',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
                 padding: '12px 16px',
-                borderRadius: '10px',
-                fontSize: '0.85rem',
+                borderRadius: '12px',
+                fontSize: '13px',
                 marginBottom: '20px',
               }}
             >
@@ -100,7 +124,7 @@ export const RegisterPage: React.FC = () => {
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+                <label className="form-label">
                   Your Name
                 </label>
                 <input
@@ -113,7 +137,7 @@ export const RegisterPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+                <label className="form-label">
                   Business Name
                 </label>
                 <input
@@ -128,7 +152,7 @@ export const RegisterPage: React.FC = () => {
             </div>
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+              <label className="form-label">
                 Business Category
               </label>
               <select
@@ -145,7 +169,7 @@ export const RegisterPage: React.FC = () => {
             </div>
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+              <label className="form-label">
                 Email Address
               </label>
               <input
@@ -160,7 +184,7 @@ export const RegisterPage: React.FC = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '22px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+                <label className="form-label">
                   Phone Number
                 </label>
                 <input
@@ -172,7 +196,7 @@ export const RegisterPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+                <label className="form-label">
                   Password
                 </label>
                 <input
@@ -186,16 +210,30 @@ export const RegisterPage: React.FC = () => {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn btn-dark-pill"
+              style={{
+                width: '100%',
+                height: '46px',
+                fontSize: '14px',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+              }}
+            >
               {loading ? 'Creating Account...' : 'Get Started Free'}
               <ArrowRight size={16} />
             </button>
           </form>
 
-          <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', marginTop: '22px' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
               Already have an account?{' '}
-              <Link to="/login" style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+              <Link to="/login" style={{ color: 'var(--primary-hover)', fontWeight: 600, textDecoration: 'none' }}>
                 Sign in
               </Link>
             </p>
