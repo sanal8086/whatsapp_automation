@@ -164,7 +164,7 @@ export const AdminPage: React.FC = () => {
   });
 
   return (
-    <div style={{ padding: '36px', minHeight: '100vh', backgroundColor: 'var(--bg-main)' }}>
+    <div style={{ padding: '36px', minHeight: '100vh', backgroundColor: 'var(--bg-body)' }}>
       {/* Top Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -172,10 +172,10 @@ export const AdminPage: React.FC = () => {
             <ShieldCheck size={24} color="#fff" />
           </div>
           <div>
-            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-main)' }}>
+            <h1 className="page-title">
               Platform Super Admin
             </h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            <p className="page-subtitle">
               Multi-tenant management, manual billing verification, messaging credit adjustments & audit logging.
             </p>
           </div>
@@ -195,56 +195,44 @@ export const AdminPage: React.FC = () => {
 
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px', marginBottom: '28px' }}>
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total Businesses</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
+        <div className="card card-interactive" style={{ padding: '22px 20px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>Total Businesses</span>
+          <div style={{ fontSize: '34px', fontWeight: 450, letterSpacing: '-1.2px', color: 'var(--text-main)', marginTop: '8px', lineHeight: 1 }}>
             {overview?.total_businesses || 0}
           </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--success)' }}>{overview?.active_businesses || 0} Active Tenants</span>
+          <span style={{ fontSize: '12px', color: 'var(--success)', display: 'block', marginTop: '8px' }}>{overview?.active_businesses || 0} Active Tenants</span>
         </div>
 
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Registered Users</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
+        <div className="card card-interactive" style={{ padding: '22px 20px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>Registered Users</span>
+          <div style={{ fontSize: '34px', fontWeight: 450, letterSpacing: '-1.2px', color: 'var(--text-main)', marginTop: '8px', lineHeight: 1 }}>
             {overview?.total_users || 0}
           </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Across all business accounts</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-dim)', display: 'block', marginTop: '8px' }}>Across all business accounts</span>
         </div>
 
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Platform Wallet Reserves</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#818CF8', marginTop: '4px' }}>
+        <div className="card card-interactive" style={{ padding: '22px 20px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>Platform Wallet Reserves</span>
+          <div style={{ fontSize: '34px', fontWeight: 450, letterSpacing: '-1.2px', color: 'var(--primary)', marginTop: '8px', lineHeight: 1 }}>
             ₹{(overview?.total_wallet_balance || 0).toLocaleString()}
           </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Prepaid WhatsApp funds in escrow</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-dim)', display: 'block', marginTop: '8px' }}>Prepaid WhatsApp funds in escrow</span>
         </div>
 
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Audit Log Events</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#F43F5E', marginTop: '4px' }}>
+        <div className="card card-interactive" style={{ padding: '22px 20px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>Audit Log Events</span>
+          <div style={{ fontSize: '34px', fontWeight: 450, letterSpacing: '-1.2px', color: '#F43F5E', marginTop: '8px', lineHeight: 1 }}>
             {auditLogs.length}
           </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Immutable security trail</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-dim)', display: 'block', marginTop: '8px' }}>Immutable security trail</span>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', gap: '24px', marginBottom: '24px', overflowX: 'auto' }}>
+      <div className="subnav-tabs">
         <button
           onClick={() => setActiveTab('businesses')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'businesses' ? '2px solid #EC4899' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'businesses' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
+          className={`subnav-tab ${activeTab === 'businesses' ? 'active' : ''}`}
         >
           <Building size={16} />
           Businesses Directory ({businesses.length})
@@ -252,19 +240,7 @@ export const AdminPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('audit')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'audit' ? '2px solid #EC4899' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'audit' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
+          className={`subnav-tab ${activeTab === 'audit' ? 'active' : ''}`}
         >
           <History size={16} />
           Compliance & Audit Logs ({auditLogs.length})
@@ -272,19 +248,7 @@ export const AdminPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('pricing')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'pricing' ? '2px solid #EC4899' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'pricing' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
+          className={`subnav-tab ${activeTab === 'pricing' ? 'active' : ''}`}
         >
           <Tag size={16} />
           Meta Pricing Rate Card ({pricingRates.length})
@@ -292,19 +256,7 @@ export const AdminPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('templates')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'templates' ? '2px solid #EC4899' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'templates' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
+          className={`subnav-tab ${activeTab === 'templates' ? 'active' : ''}`}
         >
           <FileText size={16} />
           Global Template Library ({globalTemplates.length})
@@ -313,119 +265,130 @@ export const AdminPage: React.FC = () => {
 
       {/* TAB 1: BUSINESSES DIRECTORY */}
       {activeTab === 'businesses' && (
-        <div className="glass-panel" style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                <th style={{ padding: '16px 20px' }}>Business</th>
-                <th style={{ padding: '16px 20px' }}>WhatsApp Status</th>
-                <th style={{ padding: '16px 20px' }}>Subscription Lifecycle</th>
-                <th style={{ padding: '16px 20px' }}>Wallet Balance</th>
-                <th style={{ padding: '16px 20px' }}>Account Status</th>
-                <th style={{ padding: '16px 20px', textAlign: 'right' }}>Admin Operations</th>
-              </tr>
-            </thead>
-            <tbody>
-              {businesses.map((biz) => (
-                <tr key={biz.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '14px 20px' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{biz.name}</div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'monospace' }}>/{biz.slug}</span>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>ID: {biz.id.slice(0, 10)}...</span>
-                  </td>
-
-                  <td style={{ padding: '14px 20px' }}>
-                    <span className={`badge ${biz.whatsapp_status === 'CONNECTED' ? 'badge-whatsapp' : 'badge-warning'}`}>
-                      {biz.whatsapp_status}
-                    </span>
-                  </td>
-
-                  <td style={{ padding: '14px 20px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <span className={`badge ${biz.subscription_status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
-                          {biz.subscription_status}
-                        </span>
-                        <span className={`badge ${biz.subscription_payment === 'MANUAL_VERIFIED' ? 'badge-info' : 'badge-neutral'}`}>
-                          {biz.subscription_payment}
-                        </span>
-                      </div>
-                      {biz.subscription_ends_at && (
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
-                          Expires: {new Date(biz.subscription_ends_at).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td style={{ padding: '14px 20px', fontWeight: 700, color: 'var(--text-main)' }}>
-                    ₹{biz.wallet_balance.toFixed(2)}
-                  </td>
-
-                  <td style={{ padding: '14px 20px' }}>
-                    <span className={`badge ${biz.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>
-                      {biz.status}
-                    </span>
-                  </td>
-
-                  <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => {
-                          setSelectedTenantId(biz.id);
-                          setSelectedTenantName(biz.name);
-                          setShowAdjustmentModal(true);
-                        }}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        title="Credit or Debit wallet balance with audit note"
-                      >
-                        Adjust Wallet
-                      </button>
-
-                      <button
-                        onClick={() => handleExtendSubscription(biz.id, 30)}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        title="Extend subscription by 30 days"
-                      >
-                        +30d Sub
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSelectedTenantId(biz.id);
-                          setSelectedTenantName(biz.name);
-                          setShowMarkPaidModal(true);
-                        }}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                      >
-                        Mark Paid
-                      </button>
-
-                      <button
-                        onClick={() => handleToggleStatus(biz.id)}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem', color: biz.status === 'ACTIVE' ? 'var(--danger)' : 'var(--success)' }}
-                      >
-                        {biz.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-                      </button>
-
-                      <button
-                        onClick={() => handleCancelSubscription(biz.id)}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--text-dim)' }}
-                        title="Cancel active subscription"
-                      >
-                        Cancel Sub
-                      </button>
-                    </div>
-                  </td>
+        <div className="table-card">
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table-modern">
+              <thead>
+                <tr>
+                  <th>Business</th>
+                  <th>WhatsApp Status</th>
+                  <th>Subscription Lifecycle</th>
+                  <th>Wallet Balance</th>
+                  <th>Account Status</th>
+                  <th style={{ textAlign: 'right' }}>Admin Operations</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {businesses.map((biz) => {
+                  const initial = (biz.name || 'B').charAt(0).toUpperCase();
+                  return (
+                    <tr key={biz.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          <div className="table-avatar purple">
+                            {initial}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px' }}>{biz.name}</div>
+                            <span style={{ fontSize: '12px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>/{biz.slug}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`badge ${biz.whatsapp_status === 'CONNECTED' ? 'badge-whatsapp' : 'badge-warning'}`}
+                          style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}
+                        >
+                          {biz.whatsapp_status}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <span className={`badge ${biz.subscription_status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`} style={{ borderRadius: '9999px', padding: '3px 10px', fontSize: '11px' }}>
+                              {biz.subscription_status}
+                            </span>
+                            <span className={`badge ${biz.subscription_payment === 'MANUAL_VERIFIED' ? 'badge-info' : 'badge-neutral'}`} style={{ borderRadius: '9999px', padding: '3px 10px', fontSize: '11px' }}>
+                              {biz.subscription_payment}
+                            </span>
+                          </div>
+                          {biz.subscription_ends_at && (
+                            <span style={{ fontSize: '11.5px', color: 'var(--text-dim)' }}>
+                              Expires: {new Date(biz.subscription_ends_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
+                        ₹{biz.wallet_balance.toFixed(2)}
+                      </td>
+
+                      <td>
+                        <span className={`badge ${biz.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`} style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}>
+                          {biz.status}
+                        </span>
+                      </td>
+
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => {
+                              setSelectedTenantId(biz.id);
+                              setSelectedTenantName(biz.name);
+                              setShowAdjustmentModal(true);
+                            }}
+                            className="btn-table-action"
+                            title="Credit or Debit wallet balance with audit note"
+                          >
+                            Adjust Wallet
+                          </button>
+
+                          <button
+                            onClick={() => handleExtendSubscription(biz.id, 30)}
+                            className="btn-table-action"
+                            title="Extend subscription by 30 days"
+                          >
+                            +30d Sub
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setSelectedTenantId(biz.id);
+                              setSelectedTenantName(biz.name);
+                              setShowMarkPaidModal(true);
+                            }}
+                            className="btn-table-action"
+                          >
+                            Mark Paid
+                          </button>
+
+                          <button
+                            onClick={() => handleToggleStatus(biz.id)}
+                            className="btn-table-action"
+                            style={{ color: biz.status === 'ACTIVE' ? 'var(--danger)' : 'var(--success)' }}
+                          >
+                            {biz.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+                          </button>
+
+                          <button
+                            onClick={() => handleCancelSubscription(biz.id)}
+                            className="btn-table-action"
+                            style={{ color: 'var(--text-dim)' }}
+                            title="Cancel active subscription"
+                          >
+                            Cancel Sub
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -433,7 +396,7 @@ export const AdminPage: React.FC = () => {
       {activeTab === 'audit' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Controls Bar */}
-          <div className="glass-card" style={{ padding: '16px', display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="card card-interactive" style={{ padding: '16px', display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
               <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
               <input
@@ -466,69 +429,73 @@ export const AdminPage: React.FC = () => {
           </div>
 
           {/* Audit Logs Table */}
-          <div className="glass-panel" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '14px 18px' }}>Timestamp</th>
-                  <th style={{ padding: '14px 18px' }}>Action</th>
-                  <th style={{ padding: '14px 18px' }}>Actor / User</th>
-                  <th style={{ padding: '14px 18px' }}>Resource Scope</th>
-                  <th style={{ padding: '14px 18px' }}>Metadata / Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAuditLogs.map((log) => (
-                  <tr key={log.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '12px 18px', color: 'var(--text-dim)', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
-                      {new Date(log.created_at).toLocaleString()}
-                    </td>
-
-                    <td style={{ padding: '12px 18px' }}>
-                      <span className={`badge ${
-                        log.action.includes('WALLET') ? 'badge-warning' :
-                        log.action.includes('CANCEL') ? 'badge-danger' :
-                        log.action.includes('CAMPAIGN') ? 'badge-info' : 'badge-whatsapp'
-                      }`}>
-                        {log.action}
-                      </span>
-                    </td>
-
-                    <td style={{ padding: '12px 18px', color: 'var(--text-main)', fontWeight: 600 }}>
-                      {log.user_email || 'System Worker'}
-                    </td>
-
-                    <td style={{ padding: '12px 18px' }}>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        {log.resource_type || 'GLOBAL'}
-                        {log.resource_id && <span style={{ fontFamily: 'monospace', display: 'block', fontSize: '0.72rem', color: 'var(--text-dim)' }}>{log.resource_id.slice(0, 12)}...</span>}
-                      </div>
-                    </td>
-
-                    <td style={{ padding: '12px 18px' }}>
-                      {log.details_json ? (
-                        <button
-                          onClick={() => setSelectedAuditLog(log)}
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: '0.72rem' }}
-                        >
-                          View Payload
-                        </button>
-                      ) : (
-                        <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {filteredAuditLogs.length === 0 && (
+          <div className="table-card">
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table-modern">
+                <thead>
                   <tr>
-                    <td colSpan={5} style={{ padding: '36px', textAlign: 'center', color: 'var(--text-dim)' }}>
-                      No audit log records found matching your filters.
-                    </td>
+                    <th>Timestamp</th>
+                    <th>Action</th>
+                    <th>Actor / User</th>
+                    <th>Resource Scope</th>
+                    <th>Metadata / Details</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredAuditLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td style={{ color: 'var(--text-dim)', whiteSpace: 'nowrap', fontSize: '12px' }}>
+                        {new Date(log.created_at).toLocaleString()}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`badge ${
+                            log.action.includes('WALLET') ? 'badge-warning' :
+                            log.action.includes('CANCEL') ? 'badge-danger' :
+                            log.action.includes('CAMPAIGN') ? 'badge-info' : 'badge-whatsapp'
+                          }`}
+                          style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}
+                        >
+                          {log.action}
+                        </span>
+                      </td>
+
+                      <td style={{ color: 'var(--text-main)', fontWeight: 600, fontSize: '13.5px' }}>
+                        {log.user_email || 'System Worker'}
+                      </td>
+
+                      <td>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                          {log.resource_type || 'GLOBAL'}
+                          {log.resource_id && <span style={{ fontFamily: 'monospace', display: 'block', fontSize: '11.5px', color: 'var(--text-dim)' }}>{log.resource_id.slice(0, 12)}...</span>}
+                        </div>
+                      </td>
+
+                      <td>
+                        {log.details_json ? (
+                          <button
+                            onClick={() => setSelectedAuditLog(log)}
+                            className="btn-table-action"
+                          >
+                            View Payload
+                          </button>
+                        ) : (
+                          <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredAuditLogs.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '48px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                        No audit log records found matching your filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -536,8 +503,8 @@ export const AdminPage: React.FC = () => {
       {/* TAB 3: META PRICING RATE CARD */}
       {activeTab === 'pricing' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div className="glass-card" style={{ padding: '20px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>
+          <div className="card card-interactive" style={{ padding: '20px' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '6px' }}>
               Meta Cloud API Dynamic Rate Table
             </h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -545,54 +512,59 @@ export const AdminPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="glass-panel" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '16px 20px' }}>Country</th>
-                  <th style={{ padding: '16px 20px' }}>Category</th>
-                  <th style={{ padding: '16px 20px' }}>Currency</th>
-                  <th style={{ padding: '16px 20px' }}>Meta Base Cost</th>
-                  <th style={{ padding: '16px 20px' }}>Platform Markup</th>
-                  <th style={{ padding: '16px 20px' }}>Final Tenant Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pricingRates.map((rate) => (
-                  <tr key={rate.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '14px 20px', fontWeight: 700, color: 'var(--text-main)' }}>
-                      {rate.country}
-                    </td>
-
-                    <td style={{ padding: '14px 20px' }}>
-                      <span className={`badge ${
-                        rate.category === 'MARKETING' ? 'badge-warning' :
-                        rate.category === 'UTILITY' ? 'badge-info' :
-                        rate.category === 'SERVICE' ? 'badge-whatsapp' : 'badge-neutral'
-                      }`}>
-                        {rate.category}
-                      </span>
-                    </td>
-
-                    <td style={{ padding: '14px 20px', color: 'var(--text-dim)' }}>
-                      {rate.currency}
-                    </td>
-
-                    <td style={{ padding: '14px 20px', color: 'var(--text-muted)' }}>
-                      ₹{rate.meta_cost.toFixed(4)}
-                    </td>
-
-                    <td style={{ padding: '14px 20px', color: 'var(--success)', fontWeight: 600 }}>
-                      +₹{rate.markup_margin.toFixed(4)}
-                    </td>
-
-                    <td style={{ padding: '14px 20px', fontWeight: 800, color: 'var(--text-main)' }}>
-                      ₹{rate.total_price.toFixed(4)}
-                    </td>
+          <div className="table-card">
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table-modern">
+                <thead>
+                  <tr>
+                    <th>Country</th>
+                    <th>Category</th>
+                    <th>Currency</th>
+                    <th>Meta Base Cost</th>
+                    <th>Platform Markup</th>
+                    <th>Final Tenant Price</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {pricingRates.map((rate) => (
+                    <tr key={rate.id}>
+                      <td style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px' }}>
+                        {rate.country}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`badge ${
+                            rate.category === 'MARKETING' ? 'badge-warning' :
+                            rate.category === 'UTILITY' ? 'badge-info' :
+                            rate.category === 'SERVICE' ? 'badge-whatsapp' : 'badge-neutral'
+                          }`}
+                          style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}
+                        >
+                          {rate.category}
+                        </span>
+                      </td>
+
+                      <td style={{ color: 'var(--text-dim)', fontSize: '13px' }}>
+                        {rate.currency}
+                      </td>
+
+                      <td style={{ color: 'var(--text-muted)', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
+                        ₹{rate.meta_cost.toFixed(4)}
+                      </td>
+
+                      <td style={{ color: 'var(--success)', fontWeight: 600, fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
+                        +₹{rate.markup_margin.toFixed(4)}
+                      </td>
+
+                      <td style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>
+                        ₹{rate.total_price.toFixed(4)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -601,13 +573,13 @@ export const AdminPage: React.FC = () => {
       {activeTab === 'templates' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
           {globalTemplates.map((gt) => (
-            <div key={gt.id} className="glass-card" style={{ padding: '22px' }}>
+            <div key={gt.id} className="card card-interactive" style={{ padding: '22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span className="badge badge-info">{gt.category}</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{gt.key}</span>
+                <span className="badge badge-info" style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}>{gt.category}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{gt.key}</span>
               </div>
-              <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '10px' }}>{gt.name}</h4>
-              <div style={{ backgroundColor: 'rgba(0,0,0,0.25)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '10px' }}>{gt.name}</h4>
+              <div style={{ backgroundColor: 'var(--bg-surface)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-subtle)', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                 {gt.body_text}
               </div>
             </div>
@@ -617,8 +589,8 @@ export const AdminPage: React.FC = () => {
 
       {/* MODAL: MARK SUBSCRIPTION PAID */}
       {showMarkPaidModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '420px', padding: '24px' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="modal-content" style={{ maxWidth: '420px', padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Mark Subscription Payment</h3>
@@ -650,8 +622,8 @@ export const AdminPage: React.FC = () => {
 
       {/* MODAL: WALLET ADJUSTMENT (CREDIT OR DEBIT) */}
       {showAdjustmentModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '440px', padding: '26px' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="modal-content" style={{ maxWidth: '440px', padding: '26px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Adjust Messaging Wallet</h3>
@@ -747,8 +719,8 @@ export const AdminPage: React.FC = () => {
 
       {/* MODAL: AUDIT LOG PAYLOAD VIEWER */}
       {selectedAuditLog && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '560px', padding: '26px' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="modal-content" style={{ maxWidth: '560px', padding: '26px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Audit Event Details</h3>

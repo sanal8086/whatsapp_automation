@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { apiRequest, apiDownload } from '../../api/client';
 import { Customer, Segment, ImportPreview } from '../../types';
+import { StatCard } from '../../components/ui';
 
 export const CustomersPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'customers' | 'segments'>('customers');
@@ -264,10 +265,10 @@ export const CustomersPage: React.FC = () => {
 
   const getTierBadge = (tier: string) => {
     switch (tier.toUpperCase()) {
-      case 'PLATINUM': return { bg: 'rgba(168, 85, 247, 0.15)', text: '#C084FC', border: 'rgba(168, 85, 247, 0.3)' };
-      case 'GOLD': return { bg: 'rgba(245, 158, 11, 0.15)', text: '#FBBF24', border: 'rgba(245, 158, 11, 0.3)' };
-      case 'SILVER': return { bg: 'rgba(156, 163, 175, 0.15)', text: '#E5E7EB', border: 'rgba(156, 163, 175, 0.3)' };
-      default: return { bg: 'rgba(180, 83, 9, 0.15)', text: '#FCD34D', border: 'rgba(180, 83, 9, 0.3)' };
+      case 'PLATINUM': return { bg: 'rgba(168, 85, 247, 0.1)', text: '#7C3AED', border: 'rgba(168, 85, 247, 0.25)' };
+      case 'GOLD': return { bg: 'rgba(245, 158, 11, 0.1)', text: '#B45309', border: 'rgba(245, 158, 11, 0.25)' };
+      case 'SILVER': return { bg: 'rgba(156, 163, 175, 0.12)', text: '#6B7280', border: 'rgba(156, 163, 175, 0.3)' };
+      default: return { bg: 'rgba(180, 83, 9, 0.1)', text: '#92400E', border: 'rgba(180, 83, 9, 0.25)' };
     }
   };
 
@@ -276,10 +277,10 @@ export const CustomersPage: React.FC = () => {
       {/* Header and Switcher */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>
+          <h1 className="page-title">
             Customer Directory & CRM
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>
+          </h1>
+          <p className="page-subtitle">
             Manage loyalty accounts, normalize phone numbers & create dynamic target groups.
           </p>
         </div>
@@ -300,42 +301,43 @@ export const CustomersPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ─── Dashboard-Style Stat Cards Row (Customers Pastel Palette) ─── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
+        <StatCard
+          label="Total Database"
+          value={customers.length.toString()}
+          delta="Enrolled loyalty contacts"
+          tone="sky-aqua"
+          icon={<Users size={18} />}
+        />
+        <StatCard
+          label="WhatsApp Opted-In"
+          value={customers.filter((c) => c.whatsapp_consent).length.toString()}
+          delta={`${customers.length > 0 ? Math.round((customers.filter((c) => c.whatsapp_consent).length / customers.length) * 100) : 100}% broadcast consent`}
+          tone="pistachio"
+          icon={<CheckCircle size={18} />}
+        />
+        <StatCard
+          label="Active Segments"
+          value={segments.length.toString()}
+          delta="Smart behavioral filters"
+          tone="apricot"
+          icon={<Layers size={18} />}
+        />
+      </div>
+
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', gap: '24px' }}>
+      <div className="subnav-tabs">
         <button
           onClick={() => setActiveTab('customers')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'customers' ? '2px solid var(--primary)' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'customers' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
+          className={`subnav-tab ${activeTab === 'customers' ? 'active' : ''}`}
         >
           <Users size={16} />
           All Customers ({customers.length})
         </button>
         <button
           onClick={() => setActiveTab('segments')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'segments' ? '2px solid var(--primary)' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'segments' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
+          className={`subnav-tab ${activeTab === 'segments' ? 'active' : ''}`}
         >
           <Layers size={16} />
           Target Segments ({segments.length})
@@ -346,13 +348,11 @@ export const CustomersPage: React.FC = () => {
       {activeTab === 'customers' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Filters Bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', width: '320px' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+          <div className="table-filter-bar">
+            <div className="search-pill" style={{ width: '320px' }}>
+              <Search size={16} color="var(--text-dim)" />
               <input
                 type="text"
-                className="form-input"
-                style={{ paddingLeft: '38px' }}
                 placeholder="Search phone, name, email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -360,100 +360,112 @@ export const CustomersPage: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Tier:</span>
-              {['ALL', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM'].map((tier) => (
-                <button
-                  key={tier}
-                  onClick={() => setSelectedTier(tier)}
-                  className={`btn ${selectedTier === tier ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                >
-                  {tier}
-                </button>
-              ))}
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>Tier:</span>
+              <div className="filter-pills">
+                {['ALL', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM'].map((tier) => (
+                  <button
+                    key={tier}
+                    onClick={() => setSelectedTier(tier)}
+                    className={`filter-pill ${selectedTier === tier ? 'active' : ''}`}
+                  >
+                    {tier}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* Customers Table */}
-          <div className="glass-panel" style={{ overflow: 'hidden' }}>
+          <div className="table-card">
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+              <table className="table-modern">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)' }}>
-                    <th style={{ padding: '14px 18px', fontWeight: 600 }}>Customer</th>
-                    <th style={{ padding: '14px 18px', fontWeight: 600 }}>Mobile</th>
-                    <th style={{ padding: '14px 18px', fontWeight: 600 }}>Tier</th>
-                    <th style={{ padding: '14px 18px', fontWeight: 600 }}>Points Balance</th>
-                    <th style={{ padding: '14px 18px', fontWeight: 600 }}>Lifetime Spend</th>
-                    <th style={{ padding: '14px 18px', fontWeight: 600 }}>Visits</th>
-                    <th style={{ padding: '14px 18px', fontWeight: 600 }}>WhatsApp</th>
-                    <th style={{ padding: '14px 18px', fontWeight: 600, textAlign: 'right' }}>Actions</th>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Mobile</th>
+                    <th>Tier</th>
+                    <th>Points Balance</th>
+                    <th>Lifetime Spend</th>
+                    <th>Visits</th>
+                    <th>WhatsApp</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={8} style={{ padding: '36px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                      <td colSpan={8} style={{ padding: '48px', textAlign: 'center', color: 'var(--text-dim)' }}>
                         Loading customer database...
                       </td>
                     </tr>
                   ) : customers.length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{ padding: '48px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                      <td colSpan={8} style={{ padding: '60px', textAlign: 'center', color: 'var(--text-dim)' }}>
                         No customers match this filter. Click "Add Customer" or "Import Excel" to get started.
                       </td>
                     </tr>
                   ) : (
                     customers.map((c) => {
                       const tierStyle = getTierBadge(c.tier);
+                      const initial = (c.first_name || 'U').charAt(0).toUpperCase();
+                      const avatarClass = c.tier === 'PLATINUM' ? 'purple' : c.tier === 'GOLD' ? '' : 'cyan';
                       return (
-                        <tr key={c.id} style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background-color 0.15s' }}>
-                          <td style={{ padding: '14px 18px' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                              {c.first_name ? `${c.first_name} ${c.last_name || ''}` : 'Unnamed Member'}
+                        <tr key={c.id}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                              <div className={`table-avatar ${avatarClass}`}>
+                                {initial}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px' }}>
+                                  {c.first_name ? `${c.first_name} ${c.last_name || ''}` : 'Unnamed Member'}
+                                </div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{c.email || 'No email'}</div>
+                              </div>
                             </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{c.email || 'No email'}</div>
                           </td>
-                          <td style={{ padding: '14px 18px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                          <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '13px' }}>
                             {c.phone_normalized || c.phone}
                           </td>
-                          <td style={{ padding: '14px 18px' }}>
+                          <td>
                             <span
                               style={{
-                                padding: '3px 8px',
-                                borderRadius: '6px',
-                                fontSize: '0.72rem',
+                                padding: '4px 12px',
+                                borderRadius: '9999px',
+                                fontSize: '11px',
                                 fontWeight: 700,
+                                letterSpacing: '0.04em',
                                 backgroundColor: tierStyle.bg,
                                 color: tierStyle.text,
                                 border: `1px solid ${tierStyle.border}`,
+                                display: 'inline-block',
                               }}
                             >
                               {c.tier}
                             </span>
                           </td>
-                          <td style={{ padding: '14px 18px' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.95rem' }}>
+                          <td>
+                            <span style={{ fontWeight: 600, color: '#0284c7', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>
                               {c.points_balance.toLocaleString()}
                             </span>
                           </td>
-                          <td style={{ padding: '14px 18px', color: 'var(--text-main)', fontWeight: 600 }}>
+                          <td style={{ color: 'var(--text-main)', fontWeight: 600, fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
                             ₹{c.lifetime_spend.toLocaleString()}
                           </td>
-                          <td style={{ padding: '14px 18px', color: 'var(--text-muted)' }}>
+                          <td style={{ color: 'var(--text-muted)', fontSize: '13.5px' }}>
                             {c.visits_count}
                           </td>
-                          <td style={{ padding: '14px 18px' }}>
+                          <td>
                             {c.whatsapp_consent ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#10B981', fontSize: '0.78rem' }}>
-                                <CheckCircle size={14} /> Subscribed
+                              <span className="badge badge-whatsapp" style={{ fontSize: '11px', textTransform: 'none', letterSpacing: 'normal' }}>
+                                <CheckCircle size={12} /> Subscribed
                               </span>
                             ) : (
-                              <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Opted Out</span>
+                              <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Opted Out</span>
                             )}
                           </td>
-                          <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                            <Link to={`/app/customers/${c.id}`} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }}>
+                          <td style={{ textAlign: 'right' }}>
+                            <Link to={`/app/customers/${c.id}`} className="btn-table-action">
                               <Eye size={13} />
                               View 360° Profile
                             </Link>
@@ -484,10 +496,10 @@ export const CustomersPage: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
             {segments.map((seg) => (
-              <div key={seg.id} className="glass-card" style={{ padding: '22px' }}>
+              <div key={seg.id} className="card card-interactive" style={{ padding: '22px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                   <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>{seg.name}</h4>
-                  <span className="badge badge-primary">{seg.cached_count} Members</span>
+                  <span className="badge badge-info">{seg.cached_count} Members</span>
                 </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '16px', minHeight: '36px' }}>
                   {seg.description || 'Target specific audiences with tailored promotions.'}
@@ -509,8 +521,8 @@ export const CustomersPage: React.FC = () => {
 
       {/* Modal: Add Customer */}
       {showAddModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '450px', padding: '28px' }}>
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '450px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Add Customer</h3>
               <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
@@ -564,8 +576,8 @@ export const CustomersPage: React.FC = () => {
 
       {/* Modal: Production Excel/CSV Import & Column Mapping */}
       {showImportModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '680px', maxHeight: '90vh', overflowY: 'auto', padding: '28px' }}>
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '680px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <FileSpreadsheet size={22} color="var(--primary)" />
@@ -588,7 +600,7 @@ export const CustomersPage: React.FC = () => {
                     borderRadius: '12px',
                     padding: '36px',
                     textAlign: 'center',
-                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    backgroundColor: 'var(--bg-surface)',
                     marginBottom: '20px',
                     cursor: 'pointer'
                   }}
@@ -610,9 +622,9 @@ export const CustomersPage: React.FC = () => {
               </div>
             ) : (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', backgroundColor: 'rgba(79, 70, 229, 0.1)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', backgroundColor: 'var(--primary-bg)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(100, 211, 231, 0.25)' }}>
                   <div>
-                    <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.875rem' }}>File: {importPreview.filename}</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.875rem' }}>File: {importPreview.filename}</span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>{importPreview.total_rows} customer records found</span>
                   </div>
                   <button onClick={() => setImportPreview(null)} className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
@@ -740,8 +752,8 @@ export const CustomersPage: React.FC = () => {
 
       {/* Modal: Create Segment */}
       {showSegmentModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '480px', padding: '28px' }}>
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Build Dynamic Segment</h3>
               <button onClick={() => setShowSegmentModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
@@ -772,7 +784,7 @@ export const CustomersPage: React.FC = () => {
                 />
               </div>
 
-              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-subtle)', marginBottom: '18px' }}>
+              <div style={{ backgroundColor: 'var(--bg-surface)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-default)', marginBottom: '18px' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', display: 'block', marginBottom: '10px' }}>
                   Targeting Rule (Condition)
                 </span>

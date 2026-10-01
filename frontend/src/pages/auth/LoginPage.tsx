@@ -52,8 +52,8 @@ export const LoginPage: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'var(--bg-main)',
-        backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 60%)',
+        backgroundColor: 'var(--bg-body)',
+        backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(100, 211, 231, 0.12) 0%, transparent 60%)',
         padding: '24px',
       }}
     >
@@ -69,7 +69,7 @@ export const LoginPage: React.FC = () => {
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: 'var(--shadow-glow)',
+              boxShadow: 'var(--shadow-md)',
               marginBottom: '16px',
             }}
           >
@@ -84,7 +84,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Card */}
-        <div className="glass-panel" style={{ padding: '32px' }}>
+        <div className="card" style={{ padding: '32px', boxShadow: 'var(--shadow-lg)' }}>
           {error && (
             <div
               style={{
@@ -181,8 +181,8 @@ export const LoginPage: React.FC = () => {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '9px 12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid var(--border-subtle)',
+                  backgroundColor: 'var(--bg-surface)',
+                  border: '1px solid var(--border-default)',
                   borderRadius: '8px',
                   color: 'var(--text-main)',
                   cursor: 'pointer',
