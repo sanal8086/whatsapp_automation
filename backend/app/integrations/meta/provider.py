@@ -52,7 +52,23 @@ class WhatsAppProvider(ABC):
         pass
 
     @abstractmethod
-    def exchange_embedded_signup_code(self, client_id: str, client_secret: str, code: str) -> Dict[str, Any]:
+    def exchange_embedded_signup_code(self, client_id: str, client_secret: str, code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def debug_token(self, input_token: str, app_id: str, app_secret: str) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def get_phone_numbers(self, waba_id: str, access_token: str) -> List[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def get_phone_number_details(self, phone_number_id: str, access_token: str) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def get_waba_info(self, waba_id: str, access_token: str) -> Dict[str, Any]:
         pass
 
 
@@ -85,31 +101,59 @@ class MetaCloudApiProvider(WhatsAppProvider):
             "Content-Type": "application/json"
         }
         clean_phone = to_phone.replace("+", "").replace(" ", "").replace("-", "")
+
+        # hello_world is Meta's universal default template: requires en_US and NO components
+        if template_name.lower() == "hello_world":
+            language_code = "en_US"
+            components = None
+
+        template_payload: Dict[str, Any] = {
+            "name": template_name,
+            "language": {"code": language_code}
+        }
+        if components:
+            template_payload["components"] = components
+
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": clean_phone,
             "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {"code": language_code},
-                "components": components or []
-            }
+            "template": template_payload
         }
         try:
             with httpx.Client(timeout=15.0) as client:
                 res = client.post(url, json=payload, headers=headers)
                 data = res.json()
                 if res.status_code >= 400:
+                    err = data.get("error", {})
+                    err_code = err.get("code")
+                    err_subcode = err.get("error_subcode")
+                    base_msg = err.get("error_user_msg") or err.get("message") or "Meta API Error"
+                    
+                    # Provide actionable guidance for common Meta Cloud API demo issues
+                    hint = ""
+                    if err_code == 131030:
+                        hint = " (Meta Sandbox restriction: recipient number is not verified in Meta App > WhatsApp > API Setup > To Phone Numbers)"
+                    elif err_code == 190:
+                        hint = " (Meta Access Token is invalid or expired. Please generate a new System User token)"
+                    elif err_code == 100 and "template" in base_msg.lower():
+                        hint = " (Template not found in this language. Recommended: use 'hello_world' or sync approved templates from your WABA)"
+                    elif err_code == 131047:
+                        hint = " (24-hour customer messaging window expired. Use an approved template to re-engage)"
+
+                    full_msg = f"{base_msg}{hint}"
                     return {
                         "error": True,
                         "status_code": res.status_code,
-                        "message": data.get("error", {}).get("message", "Meta API Error"),
+                        "code": err_code,
+                        "subcode": err_subcode,
+                        "message": full_msg,
                         "details": data
                     }
                 return data
         except httpx.HTTPError as exc:
-            return {"error": True, "message": str(exc)}
+            return {"error": True, "message": f"Network error contacting Meta: {str(exc)}"}
 
     def send_text_message(
         self,
@@ -235,7 +279,7 @@ class MetaCloudApiProvider(WhatsAppProvider):
         except httpx.HTTPError as exc:
             return {"error": True, "message": str(exc)}
 
-    def exchange_embedded_signup_code(self, client_id: str, client_secret: str, code: str) -> Dict[str, Any]:
+    def exchange_embedded_signup_code(self, client_id: str, client_secret: str, code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """Exchanges Meta Embedded Signup authorization code for a business system user token"""
         url = f"{self.base_url}/oauth/access_token"
         params = {
@@ -243,9 +287,67 @@ class MetaCloudApiProvider(WhatsAppProvider):
             "client_secret": client_secret,
             "code": code,
         }
+        if redirect_uri:
+            params["redirect_uri"] = redirect_uri
         try:
             with httpx.Client(timeout=15.0) as client:
                 res = client.get(url, params=params)
+                return res.json()
+        except httpx.HTTPError as exc:
+            return {"error": True, "message": str(exc)}
+
+    def debug_token(self, input_token: str, app_id: str, app_secret: str) -> Dict[str, Any]:
+        """Debugs and inspects access token permissions, granular scopes, and target IDs"""
+        url = "https://graph.facebook.com/debug_token"
+        clean_input = self._resolve_token(input_token)
+        params = {
+            "input_token": clean_input,
+            "access_token": f"{app_id}|{app_secret}"
+        }
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                res = client.get(url, params=params)
+                return res.json()
+        except httpx.HTTPError as exc:
+            return {"error": True, "message": str(exc)}
+
+    def get_phone_numbers(self, waba_id: str, access_token: str) -> List[Dict[str, Any]]:
+        """Retrieves phone numbers registered under a WhatsApp Business Account"""
+        url = f"{self.base_url}/{waba_id}/phone_numbers"
+        clean_token = self._resolve_token(access_token)
+        headers = {"Authorization": f"Bearer {clean_token}"}
+        params = {"fields": "id,display_phone_number,verified_name,quality_rating,code_verification_status"}
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                res = client.get(url, headers=headers, params=params)
+                if res.status_code == 200:
+                    return res.json().get("data", [])
+                return []
+        except httpx.HTTPError:
+            return []
+
+    def get_phone_number_details(self, phone_number_id: str, access_token: str) -> Dict[str, Any]:
+        """Fetches details for a single WhatsApp Phone Number ID from Meta Graph API"""
+        url = f"{self.base_url}/{phone_number_id}"
+        clean_token = self._resolve_token(access_token)
+        headers = {"Authorization": f"Bearer {clean_token}"}
+        params = {"fields": "id,display_phone_number,verified_name,quality_rating,code_verification_status"}
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                res = client.get(url, headers=headers, params=params)
+                return res.json()
+        except httpx.HTTPError as exc:
+            return {"error": True, "message": str(exc)}
+
+    def get_waba_info(self, waba_id: str, access_token: str) -> Dict[str, Any]:
+        """Retrieves verified details of a WhatsApp Business Account"""
+        url = f"{self.base_url}/{waba_id}"
+        clean_token = self._resolve_token(access_token)
+        headers = {"Authorization": f"Bearer {clean_token}"}
+        params = {"fields": "id,name,currency,timezone_id,account_review_status"}
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                res = client.get(url, headers=headers, params=params)
                 return res.json()
         except httpx.HTTPError as exc:
             return {"error": True, "message": str(exc)}
@@ -346,12 +448,50 @@ class MockSandboxWhatsAppProvider(WhatsAppProvider):
     def subscribe_waba_webhooks(self, waba_id: str, access_token: str) -> Dict[str, Any]:
         return {"success": True, "sandbox_simulated": True}
 
-    def exchange_embedded_signup_code(self, client_id: str, client_secret: str, code: str) -> Dict[str, Any]:
+    def exchange_embedded_signup_code(self, client_id: str, client_secret: str, code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         return {
             "access_token": f"mock_live_token_{uuid.uuid4().hex[:20]}",
             "token_type": "bearer",
             "expires_in": 5184000,
             "sandbox_simulated": True
+        }
+
+    def debug_token(self, input_token: str, app_id: str, app_secret: str) -> Dict[str, Any]:
+        return {
+            "data": {
+                "app_id": app_id,
+                "is_valid": True,
+                "scopes": ["whatsapp_business_management", "whatsapp_business_messaging"],
+                "granular_scopes": [{"scope": "whatsapp_business_management", "target_ids": ["mock_waba_123456"]}],
+                "sandbox_simulated": True
+            }
+        }
+
+    def get_phone_numbers(self, waba_id: str, access_token: str) -> List[Dict[str, Any]]:
+        return [{
+            "id": f"pn_mock_{uuid.uuid4().hex[:10]}",
+            "display_phone_number": "+91 98765 43210",
+            "verified_name": "GoAgain Merchant Store",
+            "quality_rating": "GREEN",
+            "code_verification_status": "VERIFIED"
+        }]
+
+    def get_phone_number_details(self, phone_number_id: str, access_token: str) -> Dict[str, Any]:
+        return {
+            "id": phone_number_id,
+            "display_phone_number": "+91 98765 43210",
+            "verified_name": "Demo Store",
+            "quality_rating": "GREEN",
+            "code_verification_status": "VERIFIED"
+        }
+
+    def get_waba_info(self, waba_id: str, access_token: str) -> Dict[str, Any]:
+        return {
+            "id": waba_id,
+            "name": "GoAgain Demo Merchant WABA",
+            "currency": "INR",
+            "timezone_id": "Asia/Kolkata",
+            "account_review_status": "APPROVED"
         }
 
 

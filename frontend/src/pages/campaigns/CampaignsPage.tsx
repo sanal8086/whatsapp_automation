@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Send,
   PlusCircle,
@@ -15,10 +16,11 @@ import {
   Download,
   Calendar,
   ShieldAlert,
-  Award
+  Award,
+  HelpCircle
 } from 'lucide-react';
 import { apiRequest, apiDownload } from '../../api/client';
-import { Campaign, Segment, WhatsAppTemplate } from '../../types';
+import { Campaign, Segment, WhatsAppTemplate, WhatsAppConnection } from '../../types';
 import { StatCard } from '../../components/ui';
 
 export const CampaignsPage: React.FC = () => {
@@ -26,6 +28,7 @@ export const CampaignsPage: React.FC = () => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [waConnected, setWaConnected] = useState<boolean | null>(null);
 
   // Wizard state
   const [showWizard, setShowWizard] = useState(false);
@@ -41,14 +44,16 @@ export const CampaignsPage: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [campData, segData, tplData] = await Promise.all([
+      const [campData, segData, tplData, waConn] = await Promise.all([
         apiRequest<Campaign[]>('/campaigns'),
         apiRequest<Segment[]>('/segments'),
         apiRequest<WhatsAppTemplate[]>('/whatsapp/templates'),
+        apiRequest<WhatsAppConnection>('/whatsapp/connection'),
       ]);
       setCampaigns(campData);
       setSegments(segData);
       setTemplates(tplData);
+      setWaConnected(waConn.connection_status === 'CONNECTED');
 
       if (tplData.length > 0) {
         setSelectedTemplateId(tplData[0].id);
@@ -150,6 +155,39 @@ export const CampaignsPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* WhatsApp Not Connected Warning Banner */}
+      {waConnected === false && (
+        <div
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            padding: '12px 16px',
+            borderRadius: '10px',
+            fontSize: '0.85rem',
+            color: '#F59E0B',
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center',
+          }}
+        >
+          <HelpCircle size={18} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            WhatsApp Cloud API is not connected — campaigns will fail at dispatch.{' '}
+            <Link
+              to="/app/whatsapp"
+              style={{
+                color: '#F59E0B',
+                fontWeight: 600,
+                textDecoration: 'underline',
+                marginLeft: '4px',
+              }}
+            >
+              Connect WhatsApp
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards Row (Campaigns Pastel Palette) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px' }}>

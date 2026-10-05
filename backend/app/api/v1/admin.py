@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_platform_admin
 from app.models.models import (
     Tenant, Subscription, Wallet, WhatsAppConnection,
-    PlatformTemplate, User, WalletTransaction, Plan
+    PlatformTemplate, User, TenantMember, WalletTransaction, Plan
 )
 from app.schemas.schemas import (
     AdminCreditRequest, AdminAdjustmentRequest, ManualPaymentRequest, AuditLogOut
@@ -24,6 +24,7 @@ def get_platform_overview(
 ):
     total_tenants = db.query(Tenant).count()
     active_tenants = db.query(Tenant).filter(Tenant.status == "ACTIVE").count()
+    pending_tenants = db.query(Tenant).filter(Tenant.status == "PENDING_APPROVAL").count()
     total_users = db.query(User).count()
 
     total_wallet_funds = db.query(Wallet).all()
@@ -32,6 +33,7 @@ def get_platform_overview(
     return {
         "total_businesses": total_tenants,
         "active_businesses": active_tenants,
+        "pending_businesses": pending_tenants,
         "total_users": total_users,
         "total_wallet_balance": round(wallet_sum, 2)
     }
@@ -47,6 +49,18 @@ def list_businesses(
         sub = db.query(Subscription).filter(Subscription.tenant_id == t.id).first()
         wal = db.query(Wallet).filter(Wallet.tenant_id == t.id).first()
         wa = db.query(WhatsAppConnection).filter(WhatsAppConnection.tenant_id == t.id).first()
+        
+        # Get owner details
+        owner_member = db.query(TenantMember).filter(
+            TenantMember.tenant_id == t.id,
+            TenantMember.role == "OWNER"
+        ).first()
+        owner_user = None
+        if owner_member:
+            owner_user = db.query(User).filter(User.id == owner_member.user_id).first()
+        elif t.members:
+            owner_user = db.query(User).filter(User.id == t.members[0].user_id).first()
+
         out.append({
             "id": t.id,
             "name": t.name,
@@ -58,9 +72,108 @@ def list_businesses(
             "subscription_ends_at": sub.ends_at if sub else None,
             "wallet_balance": wal.balance if wal else 0.0,
             "whatsapp_status": wa.connection_status if wa else "DISCONNECTED",
-            "created_at": t.created_at
+            "created_at": t.created_at,
+            "owner_name": owner_user.name if owner_user else "N/A",
+            "owner_email": owner_user.email if owner_user else "N/A",
+            "owner_phone": owner_user.phone if owner_user else None,
+            "owner_id": owner_user.id if owner_user else None,
         })
     return out
+
+@router.get("/users")
+def list_users(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db)
+):
+    """Platform admin query to list all registered users with their business associations and status"""
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    out = []
+    for u in users:
+        membership = db.query(TenantMember).filter(TenantMember.user_id == u.id).first()
+        tenant = None
+        if membership:
+            tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+            
+        out.append({
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "phone": u.phone,
+            "is_platform_admin": u.is_platform_admin,
+            "user_status": u.status,
+            "created_at": u.created_at,
+            "tenant_id": tenant.id if tenant else None,
+            "tenant_name": tenant.name if tenant else None,
+            "tenant_slug": tenant.slug if tenant else None,
+            "tenant_status": tenant.status if tenant else None,
+            "business_type": tenant.business_type if tenant else None,
+            "role": membership.role if membership else None
+        })
+    return out
+
+@router.post("/users/{user_id}/approve")
+def approve_user_and_business(
+    user_id: str,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db)
+):
+    """Approve a user's pending business application"""
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    membership = db.query(TenantMember).filter(TenantMember.user_id == user_id).first()
+    if not membership:
+        raise HTTPException(status_code=400, detail="User does not have an associated business")
+        
+    tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Business not found")
+        
+    tenant.status = "APPROVED"
+    db.commit()
+    db.refresh(tenant)
+    AuditService.log(
+        db=db,
+        action="BUSINESS_APPROVED",
+        tenant_id=tenant.id,
+        user_email=user.email,
+        resource_type="TENANT",
+        details={"approved_user_email": target_user.email}
+    )
+    return {"status": "success", "tenant_id": tenant.id, "tenant_status": tenant.status, "user_id": target_user.id}
+
+@router.post("/users/{user_id}/reject")
+def reject_user_and_business(
+    user_id: str,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db)
+):
+    """Reject a user's pending business application"""
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    membership = db.query(TenantMember).filter(TenantMember.user_id == user_id).first()
+    if not membership:
+        raise HTTPException(status_code=400, detail="User does not have an associated business")
+        
+    tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Business not found")
+        
+    tenant.status = "REJECTED"
+    db.commit()
+    db.refresh(tenant)
+    AuditService.log(
+        db=db,
+        action="BUSINESS_REJECTED",
+        tenant_id=tenant.id,
+        user_email=user.email,
+        resource_type="TENANT",
+        details={"rejected_user_email": target_user.email}
+    )
+    return {"status": "success", "tenant_id": tenant.id, "tenant_status": tenant.status, "user_id": target_user.id}
 
 @router.post("/businesses/{tenant_id}/toggle-status")
 def toggle_business_status(
@@ -75,6 +188,54 @@ def toggle_business_status(
     db.commit()
     db.refresh(t)
     return {"id": t.id, "status": t.status}
+
+@router.post("/businesses/{tenant_id}/approve")
+def approve_business(
+    tenant_id: str,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db)
+):
+    """Approve a pending business — transitions from PENDING_APPROVAL to APPROVED"""
+    t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Business not found")
+    if t.status != "PENDING_APPROVAL":
+        raise HTTPException(status_code=400, detail=f"Cannot approve a business with status: {t.status}")
+    t.status = "APPROVED"
+    db.commit()
+    db.refresh(t)
+    AuditService.log(
+        db=db,
+        action="BUSINESS_APPROVED",
+        tenant_id=tenant_id,
+        user_email=user.email,
+        resource_type="TENANT"
+    )
+    return {"id": t.id, "name": t.name, "status": t.status}
+
+@router.post("/businesses/{tenant_id}/reject")
+def reject_business(
+    tenant_id: str,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db)
+):
+    """Reject a pending business — transitions from PENDING_APPROVAL to REJECTED"""
+    t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Business not found")
+    if t.status != "PENDING_APPROVAL":
+        raise HTTPException(status_code=400, detail=f"Cannot reject a business with status: {t.status}")
+    t.status = "REJECTED"
+    db.commit()
+    db.refresh(t)
+    AuditService.log(
+        db=db,
+        action="BUSINESS_REJECTED",
+        tenant_id=tenant_id,
+        user_email=user.email,
+        resource_type="TENANT"
+    )
+    return {"id": t.id, "name": t.name, "status": t.status}
 
 @router.post("/subscriptions/mark-paid")
 def mark_subscription_paid(
@@ -206,7 +367,10 @@ def extend_subscription(
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
     now = datetime.now(timezone.utc)
-    base_date = sub.ends_at if (sub.ends_at and sub.ends_at > now) else now
+    ends_at = sub.ends_at
+    if ends_at and ends_at.tzinfo is None:
+        ends_at = ends_at.replace(tzinfo=timezone.utc)
+    base_date = ends_at if (ends_at and ends_at > now) else now
     sub.ends_at = base_date + timedelta(days=days)
     sub.status = "ACTIVE"
     db.commit()

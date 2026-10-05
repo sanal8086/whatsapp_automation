@@ -436,7 +436,7 @@ export const AppLayout: React.FC = () => {
                     display: 'inline-block',
                   }}
                 />
-                {waConnection.connection_status === 'CONNECTED' ? 'WhatsApp Connected' : 'WhatsApp Disconnected'}
+                {waConnection.connection_status === 'CONNECTED' ? 'WhatsApp Connected' : 'WhatsApp Not Connected'}
               </div>
             )}
           </div>

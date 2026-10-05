@@ -13,6 +13,7 @@ from app.api.v1.insights import router as insights_router
 from app.api.v1.public import router as public_router
 from app.api.v1.admin import router as admin_router
 from app.api.v1.webhooks import router as webhooks_router
+from app.api.v1.onboarding import router as onboarding_router
 
 api_router = APIRouter()
 
@@ -29,3 +30,5 @@ api_router.include_router(insights_router)
 api_router.include_router(public_router)
 api_router.include_router(admin_router)
 api_router.include_router(webhooks_router)
+api_router.include_router(onboarding_router)
+
