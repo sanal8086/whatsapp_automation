@@ -83,17 +83,22 @@ def execute_campaign_batch(tenant_id: str, campaign_id: str):
                 acc = db.query(CustomerLoyaltyAccount).filter(CustomerLoyaltyAccount.customer_id == customer.id).first()
                 points_str = str(acc.points_balance if acc else 0)
 
-                # Build dynamic template parameters
-                components = [
-                    {
-                        "type": "body",
-                        "parameters": [
-                            {"type": "text", "text": customer.first_name or "Valued Member"},
-                            {"type": "text", "text": points_str},
-                            {"type": "text", "text": business_name}
-                        ]
-                    }
-                ]
+                # Build dynamic template parameters based on template type
+                lang_code = tpl.language if tpl and tpl.language else "en"
+                if template_name.lower() == "hello_world":
+                    components = None
+                    lang_code = "en_US"
+                else:
+                    components = [
+                        {
+                            "type": "body",
+                            "parameters": [
+                                {"type": "text", "text": customer.first_name or "Valued Member"},
+                                {"type": "text", "text": points_str},
+                                {"type": "text", "text": business_name}
+                            ]
+                        }
+                    ]
 
                 recipient = CampaignRecipient(
                     campaign_id=campaign.id,
@@ -110,6 +115,7 @@ def execute_campaign_batch(tenant_id: str, campaign_id: str):
                     access_token=conn.access_token_encrypted,
                     to_phone=customer.phone_normalized,
                     template_name=template_name,
+                    language_code=lang_code,
                     components=components
                 )
 

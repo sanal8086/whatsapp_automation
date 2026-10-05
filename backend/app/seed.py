@@ -4,6 +4,7 @@ import random
 
 from app.core.database import SessionLocal, Base, engine
 from app.core.security import get_password_hash
+from app.services.whatsapp_service import WhatsAppService
 from app.models.models import (
     User, Tenant, TenantMember, Plan, Subscription,
     Wallet, WalletTransaction, WhatsAppConnection,
@@ -18,6 +19,7 @@ def run_seed():
     db: Session = SessionLocal()
 
     try:
+        now = datetime.now(timezone.utc)
         # 1. Plans
         plans_data = [
             {"name": "Starter", "code": "STARTER", "price": 999.0, "max_customers": 1000, "features": {"whatsapp": True, "rewards": 5}},
@@ -421,6 +423,162 @@ def run_seed():
                 created_at=now - timedelta(days=3)
             )
             db.add_all([camp1, camp2])
+
+        # 5. Dedicated Mock User for Client Demos (demo@goagain.com)
+        demo_user = db.query(User).filter(User.email == "demo@goagain.com").first()
+        if not demo_user:
+            demo_user = User(
+                email="demo@goagain.com",
+                name="GoAgain Demo Partner",
+                phone="+919999900000",
+                password_hash=get_password_hash("demo123"),
+                is_platform_admin=False
+            )
+            db.add(demo_user)
+            db.flush()
+
+        demo_tenant = db.query(Tenant).filter(Tenant.slug == "goagain-demo").first()
+        if not demo_tenant:
+            demo_tenant = Tenant(
+                name="GoAgain Showcase Store",
+                slug="goagain-demo",
+                business_type="Retail & Lifestyle",
+                country="India",
+                currency="INR",
+                status="ACTIVE",
+                subscription_status="ACTIVE"
+            )
+            db.add(demo_tenant)
+            db.flush()
+
+            # Membership
+            db.add(TenantMember(
+                tenant_id=demo_tenant.id,
+                user_id=demo_user.id,
+                role="OWNER"
+            ))
+
+            # Subscription (Enterprise)
+            ent_plan = db.query(Plan).filter(Plan.code == "ENTERPRISE").first()
+            db.add(Subscription(
+                tenant_id=demo_tenant.id,
+                plan_id=ent_plan.id if ent_plan else None,
+                status="ACTIVE",
+                payment_status="MANUAL_VERIFIED",
+                amount=6999.0,
+                currency="INR",
+                starts_at=now - timedelta(days=5),
+                ends_at=now + timedelta(days=90),
+                notes="Client Demo Showcase Account"
+            ))
+
+            # Wallet with ₹10,000 for client broadcast demonstrations
+            demo_wallet = Wallet(
+                tenant_id=demo_tenant.id,
+                currency="INR",
+                balance=10000.0,
+                reserved_balance=0.0,
+                status="ACTIVE"
+            )
+            db.add(demo_wallet)
+            db.flush()
+
+            db.add(WalletTransaction(
+                wallet_id=demo_wallet.id,
+                tenant_id=demo_tenant.id,
+                type="CREDIT",
+                amount=10000.0,
+                balance_before=0.0,
+                balance_after=10000.0,
+                reference_type="DEMO_PRELOAD",
+                description="Demo messaging wallet pre-funded with ₹10,000 credits",
+                created_by="SYSTEM"
+            ))
+
+            # WhatsApp Connection (configured with phone_number_id for demo broadcasts)
+            demo_wa = WhatsAppConnection(
+                tenant_id=demo_tenant.id,
+                meta_business_id="",
+                waba_id="waba_demo_138017",
+                phone_number_id="1380171298507513",
+                display_phone_number="+91 85901 02027",
+                verified_name="GoAgain Showcase Store",
+                connection_status="CONNECTED",
+                business_verification_status="VERIFIED",
+                phone_verification_status="VERIFIED",
+                access_token_encrypted="",
+                quality_rating="GREEN",
+                is_live_mode=True
+            )
+            db.add(demo_wa)
+
+            # Provision templates including hello_world
+            WhatsAppService.provision_platform_templates(db, demo_tenant.id, f"waba_{demo_tenant.id[:8]}")
+
+            # Loyalty Program
+            db.add(LoyaltyProgram(
+                tenant_id=demo_tenant.id,
+                name="GoAgain Stars Club",
+                points_currency_name="Stars",
+                earn_type="SPEND_BASED",
+                earn_rate=1.0,
+                earn_spend_unit=100.0,
+                points_expiry_days=365,
+                welcome_bonus_points=150,
+                birthday_bonus_points=300
+            ))
+
+            # Demo Segments
+            db.add(Segment(
+                tenant_id=demo_tenant.id,
+                name="All VIP Customers",
+                description="All customers reachable for WhatsApp broadcast",
+                rules_json={"operator": "AND", "conditions": []}
+            ))
+
+            # Demo Customers
+            demo_custs = [
+                ("Abin", "Pet Care", "+918590102027", "client@goagain.com", 12, 5400.0, 540),
+                ("Aarav", "Patel", "+919811100101", "aarav@gmail.com", 8, 3200.0, 320),
+                ("Diya", "Sharma", "+919811100102", "diya@gmail.com", 14, 6400.0, 640),
+                ("Karan", "Singhania", "+919811100103", "karan@gmail.com", 5, 1900.0, 190),
+            ]
+            for fn, ln, ph, em, vis, sp, pts in demo_custs:
+                dc = Customer(
+                    tenant_id=demo_tenant.id,
+                    phone=ph,
+                    phone_normalized=ph,
+                    first_name=fn,
+                    last_name=ln,
+                    email=em,
+                    marketing_consent=True,
+                    whatsapp_consent=True,
+                    city="Mumbai",
+                    visits_count=vis,
+                    lifetime_spend=sp,
+                    last_visit_at=now - timedelta(days=2)
+                )
+                db.add(dc)
+                db.flush()
+                db.add(CustomerLoyaltyAccount(
+                    tenant_id=demo_tenant.id,
+                    customer_id=dc.id,
+                    points_balance=pts,
+                    lifetime_earned=pts,
+                    lifetime_redeemed=0,
+                    current_tier="GOLD" if pts >= 500 else "SILVER"
+                ))
+                db.add(LoyaltyTransaction(
+                    tenant_id=demo_tenant.id,
+                    customer_id=dc.id,
+                    type="EARN",
+                    points=int(sp / 100),
+                    balance_before=pts - int(sp / 100),
+                    balance_after=pts,
+                    reference_type="PURCHASE",
+                    description=f"Earned Stars on visit #{vis}",
+                    created_at=now - timedelta(days=2)
+                ))
 
         db.commit()
         print("[SUCCESS] Seeding completed successfully!")

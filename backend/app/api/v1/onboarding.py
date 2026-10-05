@@ -70,6 +70,8 @@ class WhatsAppSignupCompleteRequest(BaseModel):
     verified_name: Optional[str] = None
     is_sandbox_simulation: Optional[bool] = False
     redirect_uri: Optional[str] = None
+    access_token: Optional[str] = None
+    is_live_mode: Optional[bool] = False
 
 
 @router.post("/whatsapp-signup/start")
@@ -189,7 +191,9 @@ def complete_whatsapp_signup(
         display_phone_number=req.display_phone_number,
         verified_name=req.verified_name,
         is_sandbox_simulation=bool(req.is_sandbox_simulation),
-        redirect_uri=req.redirect_uri
+        redirect_uri=req.redirect_uri,
+        access_token=req.access_token,
+        is_live_mode=bool(req.is_live_mode)
     )
 
     # Update session to COMPLETED

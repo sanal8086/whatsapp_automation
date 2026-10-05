@@ -64,6 +64,10 @@ class WhatsAppProvider(ABC):
         pass
 
     @abstractmethod
+    def get_phone_number_details(self, phone_number_id: str, access_token: str) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
     def get_waba_info(self, waba_id: str, access_token: str) -> Dict[str, Any]:
         pass
 
@@ -97,31 +101,59 @@ class MetaCloudApiProvider(WhatsAppProvider):
             "Content-Type": "application/json"
         }
         clean_phone = to_phone.replace("+", "").replace(" ", "").replace("-", "")
+
+        # hello_world is Meta's universal default template: requires en_US and NO components
+        if template_name.lower() == "hello_world":
+            language_code = "en_US"
+            components = None
+
+        template_payload: Dict[str, Any] = {
+            "name": template_name,
+            "language": {"code": language_code}
+        }
+        if components:
+            template_payload["components"] = components
+
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": clean_phone,
             "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {"code": language_code},
-                "components": components or []
-            }
+            "template": template_payload
         }
         try:
             with httpx.Client(timeout=15.0) as client:
                 res = client.post(url, json=payload, headers=headers)
                 data = res.json()
                 if res.status_code >= 400:
+                    err = data.get("error", {})
+                    err_code = err.get("code")
+                    err_subcode = err.get("error_subcode")
+                    base_msg = err.get("error_user_msg") or err.get("message") or "Meta API Error"
+                    
+                    # Provide actionable guidance for common Meta Cloud API demo issues
+                    hint = ""
+                    if err_code == 131030:
+                        hint = " (Meta Sandbox restriction: recipient number is not verified in Meta App > WhatsApp > API Setup > To Phone Numbers)"
+                    elif err_code == 190:
+                        hint = " (Meta Access Token is invalid or expired. Please generate a new System User token)"
+                    elif err_code == 100 and "template" in base_msg.lower():
+                        hint = " (Template not found in this language. Recommended: use 'hello_world' or sync approved templates from your WABA)"
+                    elif err_code == 131047:
+                        hint = " (24-hour customer messaging window expired. Use an approved template to re-engage)"
+
+                    full_msg = f"{base_msg}{hint}"
                     return {
                         "error": True,
                         "status_code": res.status_code,
-                        "message": data.get("error", {}).get("message", "Meta API Error"),
+                        "code": err_code,
+                        "subcode": err_subcode,
+                        "message": full_msg,
                         "details": data
                     }
                 return data
         except httpx.HTTPError as exc:
-            return {"error": True, "message": str(exc)}
+            return {"error": True, "message": f"Network error contacting Meta: {str(exc)}"}
 
     def send_text_message(
         self,
@@ -294,6 +326,19 @@ class MetaCloudApiProvider(WhatsAppProvider):
         except httpx.HTTPError:
             return []
 
+    def get_phone_number_details(self, phone_number_id: str, access_token: str) -> Dict[str, Any]:
+        """Fetches details for a single WhatsApp Phone Number ID from Meta Graph API"""
+        url = f"{self.base_url}/{phone_number_id}"
+        clean_token = self._resolve_token(access_token)
+        headers = {"Authorization": f"Bearer {clean_token}"}
+        params = {"fields": "id,display_phone_number,verified_name,quality_rating,code_verification_status"}
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                res = client.get(url, headers=headers, params=params)
+                return res.json()
+        except httpx.HTTPError as exc:
+            return {"error": True, "message": str(exc)}
+
     def get_waba_info(self, waba_id: str, access_token: str) -> Dict[str, Any]:
         """Retrieves verified details of a WhatsApp Business Account"""
         url = f"{self.base_url}/{waba_id}"
@@ -430,6 +475,15 @@ class MockSandboxWhatsAppProvider(WhatsAppProvider):
             "quality_rating": "GREEN",
             "code_verification_status": "VERIFIED"
         }]
+
+    def get_phone_number_details(self, phone_number_id: str, access_token: str) -> Dict[str, Any]:
+        return {
+            "id": phone_number_id,
+            "display_phone_number": "+91 98765 43210",
+            "verified_name": "Demo Store",
+            "quality_rating": "GREEN",
+            "code_verification_status": "VERIFIED"
+        }
 
     def get_waba_info(self, waba_id: str, access_token: str) -> Dict[str, Any]:
         return {
