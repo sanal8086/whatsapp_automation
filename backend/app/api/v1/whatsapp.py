@@ -128,6 +128,16 @@ def embedded_signup_callback(
         verified_name=req.verified_name
     )
 
+@router.get("/embedded-signup/config")
+def get_embedded_signup_config(tenant: Tenant = Depends(get_current_tenant)):
+    """Provides public Meta App ID and Config ID for Facebook SDK embedded signup popup"""
+    from app.core.config import settings
+    return {
+        "app_id": settings.META_APP_ID,
+        "config_id": settings.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
+        "graph_version": settings.META_GRAPH_API_VERSION
+    }
+
 @router.post("/disconnect", response_model=WhatsAppConnectionOut)
 def disconnect_account(
     tenant: Tenant = Depends(get_current_tenant),

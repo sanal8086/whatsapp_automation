@@ -83,6 +83,7 @@ export interface LoyaltyTransaction {
   id: string;
   customer_id?: string;
   customer_name?: string;
+  customer_phone?: string;
   phone?: string;
   type: string;
   points: number;

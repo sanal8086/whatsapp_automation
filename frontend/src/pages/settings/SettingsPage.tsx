@@ -107,76 +107,40 @@ export const SettingsPage: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>
+        <h1 className="page-title">
           Business Settings & Branding
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>
+        </h1>
+        <p className="page-subtitle">
           Configure merchant profile, customize branded consumer loyalty landing page & manage team.
         </p>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', gap: '24px' }}>
+      <div className="subnav-tabs">
         <button
           onClick={() => setActiveTab('profile')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'profile' ? '2px solid var(--primary)' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'profile' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-          }}
+          className={`subnav-tab ${activeTab === 'profile' ? 'active' : ''}`}
         >
           General Profile
         </button>
 
         <button
           onClick={() => setActiveTab('branding')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'branding' ? '2px solid var(--primary)' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'branding' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-          }}
+          className={`subnav-tab ${activeTab === 'branding' ? 'active' : ''}`}
         >
           Public Page & Branding
         </button>
 
         <button
           onClick={() => setActiveTab('team')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'team' ? '2px solid var(--primary)' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'team' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-          }}
+          className={`subnav-tab ${activeTab === 'team' ? 'active' : ''}`}
         >
           Team ({members.length})
         </button>
 
         <button
           onClick={() => setActiveTab('subscription')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'subscription' ? '2px solid var(--primary)' : '2px solid transparent',
-            padding: '12px 4px',
-            color: activeTab === 'subscription' ? '#fff' : 'var(--text-muted)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-          }}
+          className={`subnav-tab ${activeTab === 'subscription' ? 'active' : ''}`}
         >
           Subscription & Billing
         </button>
@@ -184,7 +148,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Tab 1: Profile */}
       {activeTab === 'profile' && (
-        <div className="glass-panel" style={{ padding: '28px', maxWidth: '580px' }}>
+        <div className="card" style={{ padding: '28px', maxWidth: '580px' }}>
           <form onSubmit={handleSaveProfile}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Business Name</label>
@@ -216,7 +180,7 @@ export const SettingsPage: React.FC = () => {
       {/* Tab 2: Public Page Branding */}
       {activeTab === 'branding' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px' }}>
-          <div className="glass-panel" style={{ padding: '28px' }}>
+          <div className="card" style={{ padding: '28px' }}>
             <form onSubmit={handleSaveBranding}>
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Hero Title</label>
@@ -267,7 +231,7 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* Mini Live Preview Box */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: '14px', fontWeight: 700 }}>
               Live Portal Mockup
             </span>
@@ -276,7 +240,7 @@ export const SettingsPage: React.FC = () => {
                 width: '100%',
                 maxWidth: '320px',
                 borderRadius: '16px',
-                backgroundColor: '#111827',
+                backgroundColor: 'var(--bg-surface)',
                 border: '1px solid var(--border-subtle)',
                 overflow: 'hidden',
                 boxShadow: 'var(--shadow-lg)',
@@ -286,7 +250,7 @@ export const SettingsPage: React.FC = () => {
                 {bizName || 'Business Name'}
               </div>
               <div style={{ padding: '16px', textAlign: 'center' }}>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginBottom: '6px' }}>{heroTitle}</h4>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>{heroTitle}</h4>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '14px' }}>{heroDesc}</p>
                 <button
                   style={{
@@ -310,42 +274,54 @@ export const SettingsPage: React.FC = () => {
 
       {/* Tab 3: Team */}
       {activeTab === 'team' && (
-        <div className="glass-panel" style={{ overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                <th style={{ padding: '16px 20px' }}>Member</th>
-                <th style={{ padding: '16px 20px' }}>Role</th>
-                <th style={{ padding: '16px 20px' }}>Status</th>
-                <th style={{ padding: '16px 20px' }}>Joined At</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((m) => (
-                <tr key={m.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '14px 20px' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{m.user_name}</div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{m.user_email}</span>
-                  </td>
-                  <td style={{ padding: '14px 20px' }}>
-                    <span className="badge badge-info">{m.role}</span>
-                  </td>
-                  <td style={{ padding: '14px 20px' }}>
-                    <span className="badge badge-success">{m.status}</span>
-                  </td>
-                  <td style={{ padding: '14px 20px', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
-                    {new Date(m.created_at).toLocaleDateString()}
-                  </td>
+        <div className="table-card">
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table-modern">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Joined At</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {members.map((m) => {
+                  const initial = (m.user_name || 'U').charAt(0).toUpperCase();
+                  return (
+                    <tr key={m.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          <div className="table-avatar cyan">
+                            {initial}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px' }}>{m.user_name}</div>
+                            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{m.user_email}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="badge badge-info" style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}>{m.role}</span>
+                      </td>
+                      <td>
+                        <span className="badge badge-success" style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}>{m.status}</span>
+                      </td>
+                      <td style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
+                        {new Date(m.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* Tab 4: Subscription */}
       {activeTab === 'subscription' && (
-        <div className="glass-panel" style={{ padding: '28px', maxWidth: '580px' }}>
+        <div className="card" style={{ padding: '28px', maxWidth: '580px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
@@ -360,7 +336,7 @@ export const SettingsPage: React.FC = () => {
             </span>
           </div>
 
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-subtle)', marginBottom: '20px' }}>
+          <div style={{ backgroundColor: 'var(--bg-surface)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-subtle)', marginBottom: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.85rem' }}>
               <span style={{ color: 'var(--text-muted)' }}>Recurring Plan Cost:</span>
               <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>₹{subscription?.amount || 2499}/month</span>

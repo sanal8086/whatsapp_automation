@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { apiRequest, apiDownload } from '../../api/client';
 import { Campaign, Segment, WhatsAppTemplate } from '../../types';
+import { StatCard } from '../../components/ui';
 
 export const CampaignsPage: React.FC = () => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -130,10 +131,10 @@ export const CampaignsPage: React.FC = () => {
       {/* Top Banner */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>
+          <h1 className="page-title">
             WhatsApp Broadcast Campaigns
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>
+          </h1>
+          <p className="page-subtitle">
             Send targeted promotions, festival offers & rewards updates directly to customer WhatsApp phones.
           </p>
         </div>
@@ -150,123 +151,118 @@ export const CampaignsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px' }}>
-        <div className="glass-panel" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            <Send size={15} color="var(--primary)" />
-            Total Delivered
-          </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '6px' }}>
-            {totalDelivered.toLocaleString()}
-          </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--success)' }}>Across all broadcast runs</span>
-        </div>
-
-        <div className="glass-panel" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            <TrendingUp size={15} color="var(--success)" />
-            Attributed Revenue
-          </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--success)', marginTop: '6px' }}>
-            ₹{totalAttributed.toLocaleString()}
-          </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>From tracked redemptions</span>
-        </div>
-
-        <div className="glass-panel" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            <DollarSign size={15} color="#FBBF24" />
-            Total Messaging Cost
-          </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '6px' }}>
-            ₹{totalCost.toFixed(2)}
-          </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Dynamic Meta pricing</span>
-        </div>
-
-        <div className="glass-panel" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            <Award size={15} color="#A855F7" />
-            Average ROI
-          </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#A855F7', marginTop: '6px' }}>
-            {overallRoi}x
-          </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Revenue / Campaign spend</span>
-        </div>
+      {/* Stats Cards Row (Campaigns Pastel Palette) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px' }}>
+        <StatCard
+          label="Total Delivered"
+          value={totalDelivered.toLocaleString()}
+          delta="Across all broadcast runs"
+          tone="cornflower"
+          icon={<Send size={18} />}
+        />
+        <StatCard
+          label="Attributed Revenue"
+          value={`₹${totalAttributed.toLocaleString()}`}
+          delta="From tracked redemptions"
+          tone="apricot"
+          icon={<TrendingUp size={18} />}
+        />
+        <StatCard
+          label="Total Messaging Cost"
+          value={`₹${totalCost.toFixed(2)}`}
+          delta="Dynamic Meta pricing"
+          tone="turquoise"
+          icon={<DollarSign size={18} />}
+        />
+        <StatCard
+          label="Average Campaign ROI"
+          value={`${overallRoi}x`}
+          delta="Revenue / Campaign spend"
+          tone="orchid-mist"
+          icon={<Award size={18} />}
+        />
       </div>
 
       {/* Campaigns History Table */}
-      <div className="glass-panel" style={{ overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-          <thead>
-            <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-              <th style={{ padding: '16px 20px' }}>Campaign Name</th>
-              <th style={{ padding: '16px 20px' }}>Audience</th>
-              <th style={{ padding: '16px 20px' }}>Status</th>
-              <th style={{ padding: '16px 20px' }}>Sent / Delivered</th>
-              <th style={{ padding: '16px 20px' }}>Actual Cost</th>
-              <th style={{ padding: '16px 20px' }}>Attributed Revenue</th>
-              <th style={{ padding: '16px 20px' }}>Scheduled / Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {campaigns.length > 0 ? (
-              campaigns.map((camp) => (
-                <tr key={camp.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '14px 20px' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{camp.name}</div>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
-                      Template: {camp.template_name || 'loyalty_points_earned'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px 20px', color: 'var(--text-muted)' }}>
-                    {camp.segment_name || 'All Customers'}
-                  </td>
-                  <td style={{ padding: '14px 20px' }}>
-                    <span
-                      className={`badge ${
-                        camp.status === 'COMPLETED' ? 'badge-success' : camp.status === 'SENDING' ? 'badge-warning' : 'badge-info'
-                      }`}
-                    >
-                      {camp.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px 20px' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                      {camp.delivered_count} / {camp.recipients_count}
-                    </div>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
-                      {camp.read_count} reads ({camp.recipients_count > 0 ? Math.round((camp.read_count / camp.recipients_count) * 100) : 0}%)
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px 20px', fontWeight: 600, color: 'var(--text-main)' }}>
-                    ₹{camp.actual_cost.toFixed(2)}
-                  </td>
-                  <td style={{ padding: '14px 20px', fontWeight: 700, color: 'var(--success)' }}>
-                    ₹{camp.attributed_revenue.toLocaleString()}
-                  </td>
-                  <td style={{ padding: '14px 20px', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
-                    {camp.scheduled_at ? `⏰ Scheduled: ${new Date(camp.scheduled_at).toLocaleDateString()}` : new Date(camp.created_at).toLocaleDateString()}
+      <div className="table-card">
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table-modern">
+            <thead>
+              <tr>
+                <th>Campaign Name</th>
+                <th>Audience</th>
+                <th>Status</th>
+                <th>Sent / Delivered</th>
+                <th>Actual Cost</th>
+                <th>Attributed Revenue</th>
+                <th>Scheduled / Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.length > 0 ? (
+                campaigns.map((camp) => (
+                  <tr key={camp.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div className="table-avatar cyan">
+                          <Send size={16} color="#0284c7" />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px' }}>{camp.name}</div>
+                          <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+                            Template: {camp.template_name || 'loyalty_points_earned'}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                      {camp.segment_name || 'All Customers'}
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          camp.status === 'COMPLETED' ? 'badge-success' : camp.status === 'SENDING' ? 'badge-warning' : 'badge-info'
+                        }`}
+                        style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}
+                      >
+                        {camp.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
+                        {camp.delivered_count} / {camp.recipients_count}
+                      </div>
+                      <span style={{ fontSize: '11.5px', color: 'var(--text-dim)' }}>
+                        {camp.read_count} reads ({camp.recipients_count > 0 ? Math.round((camp.read_count / camp.recipients_count) * 100) : 0}%)
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 550, color: 'var(--text-main)', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
+                      ₹{camp.actual_cost.toFixed(2)}
+                    </td>
+                    <td style={{ fontWeight: 600, color: 'var(--success)', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
+                      ₹{camp.attributed_revenue.toLocaleString()}
+                    </td>
+                    <td style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
+                      {camp.scheduled_at ? `⏰ Scheduled: ${new Date(camp.scheduled_at).toLocaleDateString()}` : new Date(camp.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} style={{ padding: '60px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                    No campaigns dispatched yet. Click "Create Campaign" to broadcast your first WhatsApp offer.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)' }}>
-                  No campaigns dispatched yet. Click "Create Campaign" to broadcast your first WhatsApp offer.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Production 4-Step Campaign Creation Wizard & Safety Modal */}
       {showWizard && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '580px', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="modal-content" style={{ maxWidth: '580px', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
             {/* Wizard Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
@@ -302,7 +298,7 @@ export const CampaignsPage: React.FC = () => {
                   />
                 </div>
 
-                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-subtle)', marginBottom: '20px' }}>
+                <div style={{ backgroundColor: 'var(--bg-surface)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-subtle)', marginBottom: '20px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -358,7 +354,7 @@ export const CampaignsPage: React.FC = () => {
                       padding: '14px',
                       borderRadius: '8px',
                       border: `1px solid ${selectedSegmentId === '' ? 'var(--primary)' : 'var(--border-subtle)'}`,
-                      backgroundColor: selectedSegmentId === '' ? 'rgba(79, 70, 229, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                      backgroundColor: selectedSegmentId === '' ? 'var(--primary-bg)' : 'rgba(255, 255, 255, 0.02)',
                       cursor: 'pointer',
                       display: 'flex',
                       justifyContent: 'space-between',
@@ -366,7 +362,7 @@ export const CampaignsPage: React.FC = () => {
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: 600, color: '#fff' }}>All Reachable Customers</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>All Reachable Customers</div>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Customers who opted in for WhatsApp notifications</span>
                     </div>
                     {selectedSegmentId === '' && <CheckCircle2 size={18} color="var(--primary)" />}
@@ -380,7 +376,7 @@ export const CampaignsPage: React.FC = () => {
                         padding: '14px',
                         borderRadius: '8px',
                         border: `1px solid ${selectedSegmentId === seg.id ? 'var(--primary)' : 'var(--border-subtle)'}`,
-                        backgroundColor: selectedSegmentId === seg.id ? 'rgba(79, 70, 229, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                        backgroundColor: selectedSegmentId === seg.id ? 'var(--primary-bg)' : 'rgba(255, 255, 255, 0.02)',
                         cursor: 'pointer',
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -388,7 +384,7 @@ export const CampaignsPage: React.FC = () => {
                       }}
                     >
                       <div>
-                        <div style={{ fontWeight: 600, color: '#fff' }}>{seg.name}</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{seg.name}</div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{seg.cached_count} matched members</span>
                       </div>
                       {selectedSegmentId === seg.id && <CheckCircle2 size={18} color="var(--primary)" />}
@@ -423,7 +419,7 @@ export const CampaignsPage: React.FC = () => {
                         padding: '14px',
                         borderRadius: '8px',
                         border: `1px solid ${selectedTemplateId === tpl.id ? 'var(--primary)' : 'var(--border-subtle)'}`,
-                        backgroundColor: selectedTemplateId === tpl.id ? 'rgba(79, 70, 229, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                        backgroundColor: selectedTemplateId === tpl.id ? 'var(--primary-bg)' : 'rgba(255, 255, 255, 0.02)',
                         cursor: 'pointer',
                       }}
                     >
@@ -459,10 +455,10 @@ export const CampaignsPage: React.FC = () => {
                   Review audience and estimated wallet balance deduction before final dispatch.
                 </p>
 
-                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderRadius: '10px', border: '1px solid var(--border-subtle)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                <div style={{ backgroundColor: 'var(--bg-surface)', borderRadius: '10px', border: '1px solid var(--border-subtle)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                     <span style={{ color: 'var(--text-dim)' }}>Campaign:</span>
-                    <span style={{ fontWeight: 600, color: '#fff' }}>{campaignName}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{campaignName}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                     <span style={{ color: 'var(--text-dim)' }}>Reachable Recipients:</span>
