@@ -215,3 +215,35 @@ def complete_whatsapp_signup(
             "connection_status": conn.connection_status
         }
     }
+
+
+@router.post("/whatsapp-signup/skip")
+def skip_whatsapp_signup(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    membership = db.query(TenantMember).filter(
+        TenantMember.user_id == current_user.id,
+        TenantMember.status == "ACTIVE"
+    ).first()
+
+    if not membership:
+        raise HTTPException(status_code=404, detail="No business found")
+
+    tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    if tenant.status not in ("APPROVED", "ACTIVE"):
+        raise HTTPException(status_code=403, detail="Business not approved")
+
+    conn = WhatsAppService.skip_embedded_signup(db=db, tenant_id=tenant.id)
+
+    return {
+        "status": "skipped",
+        "tenant_status": "ACTIVE",
+        "whatsapp": {
+            "connection_status": conn.connection_status
+        }
+    }
+

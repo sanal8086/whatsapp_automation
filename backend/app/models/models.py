@@ -154,7 +154,7 @@ class WhatsAppConnection(Base):
     phone_number_id = Column(String(100), nullable=True)
     display_phone_number = Column(String(50), nullable=True)
     verified_name = Column(String(255), nullable=True)
-    connection_status = Column(String(50), default="DISCONNECTED")  # DISCONNECTED, PENDING, CONNECTED, ERROR
+    connection_status = Column(String(50), default="DISCONNECTED")  # DISCONNECTED, PENDING, CONNECTED, ERROR, SKIPPED
     business_verification_status = Column(String(50), default="VERIFIED")
     phone_verification_status = Column(String(50), default="VERIFIED")
     access_token_encrypted = Column(Text, nullable=True)
@@ -534,7 +534,7 @@ class WhatsAppOnboardingSession(Base):
     # Hash of the OAuth state parameter (never store the raw state)
     state_hash = Column(String(128), nullable=False, unique=True, index=True)
 
-    # CREATED -> IN_PROGRESS -> COMPLETED / FAILED / EXPIRED
+    # CREATED -> IN_PROGRESS -> COMPLETED / FAILED / EXPIRED / SKIPPED
     status = Column(String(50), default="CREATED")
 
     # Populated after Meta Embedded Signup returns

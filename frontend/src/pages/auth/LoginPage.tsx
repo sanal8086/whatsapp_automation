@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Hexagon, Lock, Mail, ArrowRight, Sparkles, Coffee } from 'lucide-react';
+import { Hexagon, Lock, Mail, ArrowRight, Sparkles, Coffee, Store } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 
@@ -44,14 +44,23 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  // NOTE: [DEMO] Quick login fill for Wervus Cafe showcase
+  const fillWervusCafe = () => {
+    setEmail('demo@wervus.cafe');
+    setPassword('demo123');
+    setError(null);
+  };
+
   const fillDemoMerchant = () => {
     setEmail('merchant@brewandbite.com');
     setPassword('merchant123');
+    setError(null);
   };
 
   const fillSuperAdmin = () => {
     setEmail('admin@loyaltysaas.com');
     setPassword('admin123');
+    setError(null);
   };
 
   return (
@@ -207,6 +216,32 @@ export const LoginPage: React.FC = () => {
               ⚡ 1-Click Quick Demo Access
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* NOTE: [DEMO] Wervus Cafe 1-Click Login Button */}
+              <button
+                type="button"
+                onClick={fillWervusCafe}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  backgroundColor: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '14px',
+                  color: 'var(--text-main)',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Store size={15} color="#06B6D4" />
+                  Wervus Cafe Merchant
+                </span>
+                <span style={{ color: 'var(--primary-hover)', fontSize: '12px', fontWeight: 600 }}>Fill Login →</span>
+              </button>
+
               <button
                 type="button"
                 onClick={fillDemoMerchant}

@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from app.models.models import (
     WhatsAppConnection, WhatsAppTemplate, WhatsAppMessage,
     PlatformTemplate, WebhookEvent, Tenant, Customer, CampaignRecipient,
-    CustomerConsent, Wallet
+    CustomerConsent, Wallet, WhatsAppOnboardingSession
 )
 from app.services.wallet_service import WalletService
 from app.services.pricing_service import PricingService
@@ -273,6 +273,36 @@ class WhatsAppService:
             resource_id=conn.id
         )
         return conn
+
+    @staticmethod
+    def skip_embedded_signup(db: Session, tenant_id: str) -> WhatsAppConnection:
+        conn = WhatsAppService.get_or_create_connection(db, tenant_id)
+        if conn.connection_status != "CONNECTED":
+            conn.connection_status = "SKIPPED"
+
+        # Set any CREATED / IN_PROGRESS WhatsAppOnboardingSession rows for the tenant to SKIPPED
+        db.query(WhatsAppOnboardingSession).filter(
+            WhatsAppOnboardingSession.tenant_id == tenant_id,
+            WhatsAppOnboardingSession.status.in_(["CREATED", "IN_PROGRESS"])
+        ).update({"status": "SKIPPED"}, synchronize_session=False)
+
+        # Transition tenant to ACTIVE
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if t:
+            t.status = "ACTIVE"
+
+        db.commit()
+        db.refresh(conn)
+
+        AuditService.log(
+            db=db,
+            action="WHATSAPP_ONBOARDING_SKIPPED",
+            tenant_id=tenant_id,
+            resource_type="WHATSAPP_CONNECTION",
+            resource_id=conn.id
+        )
+        return conn
+
 
     @staticmethod
     def provision_platform_templates(db: Session, tenant_id: str, waba_id: str):

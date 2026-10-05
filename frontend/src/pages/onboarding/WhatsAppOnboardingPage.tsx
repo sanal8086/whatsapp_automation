@@ -56,6 +56,8 @@ export const WhatsAppOnboardingPage: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string>('Preparing Meta connection...');
   const [config, setConfig] = useState<SignupConfig | null>(null);
   const [result, setResult] = useState<WhatsAppResult | null>(null);
+  const [confirmingSkip, setConfirmingSkip] = useState(false);
+  const [skipping, setSkipping] = useState(false);
 
   // Captured IDs from Meta postMessage event listener
   const capturedWabaIdRef = useRef<string | null>(null);
@@ -294,6 +296,28 @@ export const WhatsAppOnboardingPage: React.FC = () => {
 
   const goToDashboard = () => {
     navigate('/app');
+  };
+
+  const handleSkip = async () => {
+    setSkipping(true);
+    setError(null);
+    try {
+      const data = await apiRequest<{ status: string; tenant_status: string }>(
+        '/onboarding/whatsapp-signup/skip',
+        { method: 'POST' }
+      );
+      // Mirror handleCompleteSignup (:283-288) — must refresh in-memory tenant.status
+      // to ACTIVE or the guards bounce straight back to this step.
+      if (token && user && tenant) {
+        login(token, user, { ...tenant, status: data.tenant_status });
+      }
+      navigate('/app');
+    } catch (err: any) {
+      setError(err.message || 'Failed to skip WhatsApp setup');
+      setConfirmingSkip(false);
+    } finally {
+      setSkipping(false);
+    }
   };
 
   const isLiveConfigured = config && !config.is_mock_app;
@@ -636,6 +660,93 @@ export const WhatsAppOnboardingPage: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Separator & Skip for now */}
+              <div
+                style={{
+                  borderTop: '1px solid var(--border-subtle)',
+                  marginTop: '20px',
+                  paddingTop: '16px',
+                  textAlign: 'center',
+                }}
+              >
+                {!confirmingSkip ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingSkip(true)}
+                    className="btn btn-ghost"
+                    style={{
+                      width: '100%',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    Skip for now — configure later
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                      borderRadius: '10px',
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '12px',
+                      textAlign: 'left',
+                      pointerEvents: skipping ? 'none' : 'auto',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.82rem', color: '#F59E0B', flex: 1, minWidth: '220px' }}>
+                      Skip WhatsApp setup for now? Campaigns and automations stay disabled until you connect.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingSkip(false)}
+                        className="btn btn-sm btn-ghost"
+                        disabled={skipping}
+                        style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSkip}
+                        className="btn btn-sm"
+                        disabled={skipping}
+                        style={{
+                          fontSize: '0.8rem',
+                          backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                          color: '#F59E0B',
+                          border: '1px solid rgba(245, 158, 11, 0.4)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: skipping ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {skipping && (
+                          <span
+                            style={{
+                              width: '12px',
+                              height: '12px',
+                              border: '2px solid rgba(245, 158, 11, 0.3)',
+                              borderTopColor: '#F59E0B',
+                              borderRadius: '50%',
+                              display: 'inline-block',
+                              animation: 'spin 1s linear infinite',
+                            }}
+                          />
+                        )}
+                        {skipping ? 'Skipping...' : 'Yes, skip'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
