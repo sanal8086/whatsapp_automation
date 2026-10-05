@@ -580,6 +580,158 @@ def run_seed():
                     created_at=now - timedelta(days=2)
                 ))
 
+        # 6. Wervus Cafe Demo User (NOTE: Demo-only mock user for Wervus Cafe showcase. Remove before production)
+        wervus_user = db.query(User).filter(User.email == "demo@wervus.cafe").first()
+        if not wervus_user:
+            wervus_user = User(
+                email="demo@wervus.cafe",
+                name="Wervus Cafe Owner",
+                phone="+919999910000",
+                password_hash=get_password_hash("demo123"),
+                is_platform_admin=False
+            )
+            db.add(wervus_user)
+            db.flush()
+
+        wervus_tenant = db.query(Tenant).filter(Tenant.slug == "wervus-cafe").first()
+        if not wervus_tenant:
+            wervus_tenant = Tenant(
+                name="Wervus Cafe",
+                slug="wervus-cafe",
+                business_type="Cafe & Bakery",
+                country="India",
+                currency="INR",
+                status="ACTIVE",
+                subscription_status="ACTIVE"
+            )
+            db.add(wervus_tenant)
+            db.flush()
+
+            # Membership
+            db.add(TenantMember(
+                tenant_id=wervus_tenant.id,
+                user_id=wervus_user.id,
+                role="OWNER"
+            ))
+
+            # Subscription (Growth)
+            growth_plan = db.query(Plan).filter(Plan.code == "GROWTH").first()
+            db.add(Subscription(
+                tenant_id=wervus_tenant.id,
+                plan_id=growth_plan.id if growth_plan else None,
+                status="ACTIVE",
+                payment_status="MANUAL_VERIFIED",
+                amount=2499.0,
+                currency="INR",
+                starts_at=now - timedelta(days=5),
+                ends_at=now + timedelta(days=90),
+                notes="Wervus Cafe Demo Account"
+            ))
+
+            # Wallet with ₹10,000 for client demo broadcasts (NOTE: demo preload)
+            wervus_wallet = Wallet(
+                tenant_id=wervus_tenant.id,
+                currency="INR",
+                balance=10000.0,
+                reserved_balance=0.0,
+                status="ACTIVE"
+            )
+            db.add(wervus_wallet)
+            db.flush()
+
+            db.add(WalletTransaction(
+                wallet_id=wervus_wallet.id,
+                tenant_id=wervus_tenant.id,
+                type="CREDIT",
+                amount=10000.0,
+                balance_before=0.0,
+                balance_after=10000.0,
+                reference_type="DEMO_PRELOAD",
+                description="Demo messaging wallet pre-funded with ₹10,000 credits (Wervus Cafe)",
+                created_by="SYSTEM"
+            ))
+
+            # WhatsApp Connection (CONNECTED, phone_number_id for demo broadcasts)
+            wervus_wa = WhatsAppConnection(
+                tenant_id=wervus_tenant.id,
+                meta_business_id="",
+                waba_id="waba_wervus_demo",
+                phone_number_id="1380171298507513",
+                display_phone_number="+91 99999 10000",
+                verified_name="Wervus Cafe",
+                connection_status="CONNECTED",
+                business_verification_status="VERIFIED",
+                phone_verification_status="VERIFIED",
+                access_token_encrypted="",
+                quality_rating="GREEN",
+                is_live_mode=True
+            )
+            db.add(wervus_wa)
+
+            # Provision platform templates for Wervus Cafe
+            WhatsAppService.provision_platform_templates(db, wervus_tenant.id, "waba_wervus_demo")
+
+            # Loyalty Program
+            db.add(LoyaltyProgram(
+                tenant_id=wervus_tenant.id,
+                name="Wervus Cafe Rewards Club",
+                points_currency_name="Beans",
+                earn_type="SPEND_BASED",
+                earn_rate=1.0,
+                earn_spend_unit=100.0,
+                points_expiry_days=365,
+                welcome_bonus_points=100,
+                birthday_bonus_points=200
+            ))
+
+            # Demo Segment
+            db.add(Segment(
+                tenant_id=wervus_tenant.id,
+                name="All VIP Customers",
+                description="Reachable loyalty customers for WhatsApp broadcast demo",
+                rules_json={"operator": "AND", "conditions": []}
+            ))
+
+            # Demo Customer (Abin Pet Care, +918590102027, whatsapp_consent=True)
+            dc_wervus = Customer(
+                tenant_id=wervus_tenant.id,
+                phone="+918590102027",
+                phone_normalized="+918590102027",
+                first_name="Abin",
+                last_name="Pet Care",
+                email="client@wervus.cafe",
+                marketing_consent=True,
+                whatsapp_consent=True,
+                city="Kochi",
+                visits_count=15,
+                lifetime_spend=6500.0,
+                last_visit_at=now - timedelta(days=2)
+            )
+            db.add(dc_wervus)
+            db.flush()
+
+            db.add(CustomerLoyaltyAccount(
+                tenant_id=wervus_tenant.id,
+                customer_id=dc_wervus.id,
+                points_balance=650,
+                lifetime_earned=650,
+                lifetime_redeemed=0,
+                current_tier="GOLD"
+            ))
+
+            db.add(LoyaltyTransaction(
+                tenant_id=wervus_tenant.id,
+                customer_id=dc_wervus.id,
+                type="EARN",
+                points=65,
+                balance_before=585,
+                balance_after=650,
+                reference_type="PURCHASE",
+                description="Earned Beans on visit #15",
+                created_at=now - timedelta(days=2)
+            ))
+        # NOTE: [END DEMO Wervus Cafe]
+
         db.commit()
         print("[SUCCESS] Seeding completed successfully!")
     finally:

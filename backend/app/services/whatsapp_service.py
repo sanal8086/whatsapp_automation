@@ -16,6 +16,8 @@ from app.services.wallet_service import WalletService
 from app.services.pricing_service import PricingService
 from app.services.audit_service import AuditService
 from app.integrations.meta.provider import get_whatsapp_provider
+# NOTE: [DEMO] Demo WhatsApp send function for Wervus Cafe. Remove before production.
+from app.services.demo_whatsapp import send_wervus_demo_whatsapp
 from app.core.config import settings
 from app.core.crypto import encrypt_secret, decrypt_secret
 
@@ -347,30 +349,53 @@ class WhatsAppService:
             reference_type="DIRECT_MESSAGE"
         )
 
-        provider = get_whatsapp_provider(use_live=conn.is_live_mode, access_token=conn.access_token_encrypted)
-        if template_name:
-            # Query template language for accurate Meta Cloud API matching
-            tpl = db.query(WhatsAppTemplate).filter(
-                WhatsAppTemplate.tenant_id == tenant_id,
-                WhatsAppTemplate.name == template_name.lower()
-            ).first()
-            lang = tpl.language if tpl and tpl.language else ("en_US" if template_name.lower() == "hello_world" else "en")
+        # NOTE: [DEMO] Routing for Wervus Cafe client demo showcase. Remove before production.
+        if tenant and tenant.slug == "wervus-cafe":
+            lang = "en_US" if (template_name and template_name.lower() == "hello_world") else (settings.WERVUS_DEMO_LANGUAGE_CODE or "en")
+            if template_name:
+                tpl = db.query(WhatsAppTemplate).filter(
+                    WhatsAppTemplate.tenant_id == tenant_id,
+                    WhatsAppTemplate.name == template_name.lower()
+                ).first()
+                if tpl and tpl.language:
+                    lang = tpl.language
 
-            res = provider.send_template_message(
-                phone_number_id=conn.phone_number_id,
-                access_token=conn.access_token_encrypted,
+            res = send_wervus_demo_whatsapp(
+                db=db,
                 to_phone=to_phone,
                 template_name=template_name,
                 language_code=lang,
-                components=components
+                components=components,
+                phone_number_id=conn.phone_number_id or settings.WERVUS_DEMO_PHONE_NUMBER_ID,
+                access_token=conn.access_token_encrypted or settings.WERVUS_DEMO_WHATSAPP_TOKEN,
+                custom_text=custom_text
             )
         else:
-            res = provider.send_text_message(
-                phone_number_id=conn.phone_number_id,
-                access_token=conn.access_token_encrypted,
-                to_phone=to_phone,
-                text=custom_text or "Hello from your rewards club!"
-            )
+            provider = get_whatsapp_provider(use_live=conn.is_live_mode, access_token=conn.access_token_encrypted)
+            if template_name:
+                # Query template language for accurate Meta Cloud API matching
+                tpl = db.query(WhatsAppTemplate).filter(
+                    WhatsAppTemplate.tenant_id == tenant_id,
+                    WhatsAppTemplate.name == template_name.lower()
+                ).first()
+                lang = tpl.language if tpl and tpl.language else ("en_US" if template_name.lower() == "hello_world" else "en")
+
+                res = provider.send_template_message(
+                    phone_number_id=conn.phone_number_id,
+                    access_token=conn.access_token_encrypted,
+                    to_phone=to_phone,
+                    template_name=template_name,
+                    language_code=lang,
+                    components=components
+                )
+            else:
+                res = provider.send_text_message(
+                    phone_number_id=conn.phone_number_id,
+                    access_token=conn.access_token_encrypted,
+                    to_phone=to_phone,
+                    text=custom_text or "Hello from your rewards club!"
+                )
+        # NOTE: [END DEMO]
 
         provider_msg_id = None
         status = "QUEUED"

@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     # Frontend Base URL
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+    # NOTE: [DEMO] Wervus Cafe Client Demo WhatsApp Settings. Remove before production.
+    WERVUS_DEMO_WHATSAPP_TOKEN: Optional[str] = os.getenv("WERVUS_DEMO_WHATSAPP_TOKEN", "")
+    WERVUS_DEMO_PHONE_NUMBER_ID: str = os.getenv("WERVUS_DEMO_PHONE_NUMBER_ID", "1380171298507513")
+    WERVUS_DEMO_TEMPLATE_NAME: str = os.getenv("WERVUS_DEMO_TEMPLATE_NAME", "hello_world")
+    WERVUS_DEMO_LANGUAGE_CODE: str = os.getenv("WERVUS_DEMO_LANGUAGE_CODE", "en_US")
+    WERVUS_DEMO_API_VERSION: str = os.getenv("WERVUS_DEMO_API_VERSION", "v22.0")
+    WERVUS_DEMO_ENABLED: bool = os.getenv("WERVUS_DEMO_ENABLED", "true").lower() in ("true", "1", "yes")
+    # NOTE: [END DEMO]
+
     class Config:
         env_file = ".env"
         extra = "ignore"
