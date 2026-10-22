@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import csv
 import io
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_tenant
-from app.models.models import Tenant, WhatsAppConnection, WhatsAppTemplate, WhatsAppMessage
+from datetime import datetime, timezone
+from pydantic import BaseModel
+from app.core.config import settings
+from app.models.models import Tenant, WhatsAppConnection, WhatsAppTemplate, WhatsAppMessage, Customer, CustomerLoyaltyAccount, Campaign
 from app.schemas.schemas import (
     WhatsAppConnectionOut, ConnectWhatsAppRequest, WhatsAppTemplateOut,
     WhatsAppTemplateCreate, SendTestMessageRequest, WhatsAppMessageOut,
@@ -14,13 +17,68 @@ from app.schemas.schemas import (
 )
 from app.services.whatsapp_service import WhatsAppService
 from app.services.pricing_service import PricingService
-from app.integrations.meta.provider import get_whatsapp_provider
+from app.integrations.meta.provider import get_whatsapp_provider, MetaCloudApiProvider
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp Cloud API"])
+
+class VerifyCredentialsRequest(BaseModel):
+    phone_number_id: str
+    access_token: str
+    waba_id: Optional[str] = None
+
+class ClientDemoBroadcastRequest(BaseModel):
+    recipient_phone: str
+    recipient_name: Optional[str] = "Demo Client"
+    template_name: Optional[str] = "hello_world"
+    custom_text: Optional[str] = None
+    add_as_customer: bool = True
 
 @router.get("/connection", response_model=WhatsAppConnectionOut)
 def get_connection(tenant: Tenant = Depends(get_current_tenant), db: Session = Depends(get_db)):
     return WhatsAppService.get_or_create_connection(db, tenant.id)
+
+@router.post("/verify-credentials")
+def verify_credentials(
+    req: VerifyCredentialsRequest,
+    tenant: Tenant = Depends(get_current_tenant)
+):
+    """
+    Live verification of Meta Cloud API credentials without storing anything.
+    Validates token and Phone Number ID against Meta Graph API.
+    """
+    token_clean = req.access_token.strip()
+    phone_id_clean = req.phone_number_id.strip()
+
+    provider = MetaCloudApiProvider(api_version=settings.META_GRAPH_API_VERSION)
+    phone_details = provider.get_phone_number_details(phone_id_clean, token_clean)
+
+    if phone_details.get("error") or "error" in phone_details:
+        err_msg = phone_details.get("message") or (phone_details.get("error", {}).get("message") if isinstance(phone_details.get("error"), dict) else str(phone_details.get("error")))
+        return {
+            "valid": False,
+            "error": err_msg or "Failed to verify Phone Number ID with Meta Graph API"
+        }
+
+    templates_count = 0
+    approved_templates = []
+    if req.waba_id and req.waba_id.strip():
+        try:
+            remote_tpls = provider.sync_templates(req.waba_id.strip(), token_clean)
+            approved_templates = [t.get("name") for t in remote_tpls if t.get("status") == "APPROVED"]
+            templates_count = len(approved_templates)
+        except Exception:
+            pass
+
+    return {
+        "valid": True,
+        "phone_number_id": phone_details.get("id", phone_id_clean),
+        "display_phone_number": phone_details.get("display_phone_number", ""),
+        "verified_name": phone_details.get("verified_name", ""),
+        "quality_rating": phone_details.get("quality_rating", "GREEN"),
+        "code_verification_status": phone_details.get("code_verification_status", "VERIFIED"),
+        "templates_count": templates_count,
+        "approved_templates": approved_templates
+    }
 
 @router.post("/connect", response_model=WhatsAppConnectionOut)
 def connect_account(
@@ -28,6 +86,8 @@ def connect_account(
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db)
 ):
+    # Auto-detect live mode if Meta access token starts with EAA
+    is_live = req.is_live_mode or (bool(req.access_token) and req.access_token.strip().startswith("EAA"))
     conn = WhatsAppService.connect_account(
         db=db,
         tenant_id=tenant.id,
@@ -36,7 +96,7 @@ def connect_account(
         waba_id=req.waba_id,
         phone_number_id=req.phone_number_id,
         access_token=req.access_token,
-        is_live_mode=req.is_live_mode
+        is_live_mode=is_live
     )
     return conn
 
@@ -67,6 +127,16 @@ def embedded_signup_callback(
         display_phone_number=req.display_phone_number,
         verified_name=req.verified_name
     )
+
+@router.get("/embedded-signup/config")
+def get_embedded_signup_config(tenant: Tenant = Depends(get_current_tenant)):
+    """Provides public Meta App ID and Config ID for Facebook SDK embedded signup popup"""
+    from app.core.config import settings
+    return {
+        "app_id": settings.META_APP_ID,
+        "config_id": settings.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
+        "graph_version": settings.META_GRAPH_API_VERSION
+    }
 
 @router.post("/disconnect", response_model=WhatsAppConnectionOut)
 def disconnect_account(
@@ -145,20 +215,254 @@ def create_template(
     db.refresh(tpl)
     return tpl
 
+class MediaUploadOut(BaseModel):
+    media_id: str
+
+@router.post("/media", response_model=MediaUploadOut)
+def upload_media_file(
+    file: UploadFile = File(...),
+    template_id: Optional[str] = None,
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db)
+):
+    """
+    Uploads an image to the Meta Cloud API media endpoint and returns the media id.
+    This id is passed to campaigns as image_url and used as the template header media.
+    """
+    allowed = {"image/jpeg", "image/png", "image/jpg", "image/webp"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG or WebP images are supported")
+
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image exceeds Meta's 5MB limit")
+
+    conn = db.query(WhatsAppConnection).filter(WhatsAppConnection.tenant_id == tenant.id).first()
+    if not conn or conn.connection_status != "CONNECTED":
+        raise HTTPException(status_code=400, detail="WhatsApp is not connected")
+
+    # Mirror the offer-run dispatch credentials: offer_announcement runs use the
+    # demo AWARD_REWARDS credentials when configured.
+    phone_number_id = conn.phone_number_id
+    access_token = conn.access_token_encrypted
+    if template_id:
+        tpl = db.query(WhatsAppTemplate).filter(
+            WhatsAppTemplate.id == template_id,
+            WhatsAppTemplate.tenant_id == tenant.id
+        ).first()
+        if tpl and tpl.name.lower() == "offer_announcement" and settings.AWARD_REWARDS_WHATSAPP_TOKEN:
+            phone_number_id = settings.AWARD_REWARDS_PHONE_NUMBER_ID
+            access_token = settings.AWARD_REWARDS_WHATSAPP_TOKEN
+
+    provider = MetaCloudApiProvider(api_version=settings.META_GRAPH_API_VERSION)
+    mime = "image/jpeg" if file.content_type in ("image/jpg",) else file.content_type
+    res = provider.upload_media(
+        phone_number_id=phone_number_id,
+        access_token=access_token,
+        file_bytes=data,
+        mime_type=mime
+    )
+    if res.get("error") or not res.get("id"):
+        raise HTTPException(status_code=502, detail=res.get("message") or f"Meta media upload failed: {res}")
+    return {"media_id": res["id"]}
+
 @router.post("/send-test", response_model=WhatsAppMessageOut)
 def send_test_message(
     req: SendTestMessageRequest,
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db)
 ):
+    template_name = None
+    components: Optional[List[Dict[str, Any]]] = None
+
+    if req.template_id:
+        tpl = db.query(WhatsAppTemplate).filter(
+            WhatsAppTemplate.id == req.template_id,
+            WhatsAppTemplate.tenant_id == tenant.id
+        ).first()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        template_name = tpl.name
+
+        # Auto-fill body variables with generic sample values so the template
+        # renders even if the merchant never set up variable mapping
+        import re
+        var_count = len(re.findall(r"\{\{\d+\}\}", tpl.body_text or ""))
+        if var_count:
+            samples = ["Valued Member", "100", "Our Store", "31 Dec 2026", "10% OFF", "Visit us today"]
+            components = [{
+                "type": "body",
+                "parameters": [
+                    {"type": "text", "text": samples[i % len(samples)]}
+                    for i in range(var_count)
+                ]
+            }]
+
+        # If the Meta template has an IMAGE header, include its approved sample
+        # image so the test message renders exactly like the real template
+        conn_tpl = db.query(WhatsAppConnection).filter(WhatsAppConnection.tenant_id == tenant.id).first()
+        if conn_tpl and conn_tpl.waba_id:
+            try:
+                provider_tpl = MetaCloudApiProvider(api_version=settings.META_GRAPH_API_VERSION)
+                remote = provider_tpl.sync_templates(conn_tpl.waba_id, conn_tpl.access_token_encrypted or "")
+                match = next((t for t in remote if (t.get("name") or "").lower() == template_name.lower()), None)
+                header = next((c for c in (match or {}).get("components", []) if c.get("type") == "HEADER" and c.get("format") == "IMAGE"), None) if match else None
+                sample_url = ((header.get("example") or {}).get("header_handle") or [None])[0] if header else None
+                if sample_url and components:
+                    components.insert(0, {
+                        "type": "header",
+                        "parameters": [{"type": "image", "image": {"link": sample_url}}]
+                    })
+            except Exception as e:
+                print(f"[SEND_TEST] Could not resolve image header sample: {e}")
+
     msg = WhatsAppService.send_single_message(
         db=db,
         tenant_id=tenant.id,
         to_phone=req.phone,
-        template_name=req.template_id,
-        custom_text=req.custom_text
+        template_name=template_name,
+        custom_text=req.custom_text,
+        components=components
     )
     return msg
+
+@router.post("/broadcast-client-demo")
+def broadcast_client_demo(
+    req: ClientDemoBroadcastRequest,
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db)
+):
+    """
+    Live WhatsApp Broadcast for Client Demonstration meetings.
+    1. Validates connection and ensures test wallet balance.
+    2. Registers client as active customer in CRM (optional).
+    3. Creates a tracked Live Demo Campaign in database.
+    4. Dispatches the WhatsApp template (e.g. hello_world) or custom message.
+    5. Returns instant delivery confirmation or exact actionable Meta guidance.
+    """
+    conn = db.query(WhatsAppConnection).filter(WhatsAppConnection.tenant_id == tenant.id).first()
+    if not conn or conn.connection_status != "CONNECTED":
+        raise HTTPException(
+            status_code=400,
+            detail="WhatsApp is not connected yet. Please connect your Meta Phone Number ID and Access Token in WhatsApp Settings."
+        )
+
+    clean_phone = req.recipient_phone.replace(" ", "").replace("-", "")
+    if not clean_phone.startswith("+"):
+        if len(clean_phone) == 10:
+            clean_phone = f"+91{clean_phone}"
+        else:
+            clean_phone = f"+{clean_phone}"
+
+    # 1. Optionally register client as a VIP Customer in this merchant's CRM
+    customer = None
+    if req.add_as_customer:
+        customer = db.query(Customer).filter(
+            Customer.tenant_id == tenant.id,
+            Customer.phone_normalized == clean_phone
+        ).first()
+        if not customer:
+            customer = Customer(
+                tenant_id=tenant.id,
+                phone=clean_phone,
+                phone_normalized=clean_phone,
+                first_name=req.recipient_name or "Demo Guest",
+                marketing_consent=True,
+                whatsapp_consent=True
+            )
+            db.add(customer)
+            db.flush()
+
+            # Create customer loyalty account with welcome bonus
+            db.add(CustomerLoyaltyAccount(
+                tenant_id=tenant.id,
+                customer_id=customer.id,
+                points_balance=250,
+                lifetime_earned=250,
+                lifetime_redeemed=0,
+                current_tier="GOLD"
+            ))
+            db.commit()
+
+    # 2. Create tracked Campaign record for client showcase
+    now = datetime.now(timezone.utc)
+    time_label = now.strftime("%d %b %H:%M")
+    campaign_name = f"Client Showcase - {req.recipient_name or 'Live Demo'} ({time_label})"
+    campaign = Campaign(
+        tenant_id=tenant.id,
+        name=campaign_name,
+        channel="WHATSAPP",
+        status="SENDING",
+        recipients_count=1,
+        created_at=now
+    )
+    db.add(campaign)
+    db.commit()
+    db.refresh(campaign)
+
+    # 3. Dispatch message
+    try:
+        tpl_name = (req.template_name or "hello_world").strip().lower()
+        msg = WhatsAppService.send_single_message(
+            db=db,
+            tenant_id=tenant.id,
+            to_phone=clean_phone,
+            template_name=tpl_name,
+            custom_text=req.custom_text,
+            campaign_id=campaign.id,
+            customer_id=customer.id if customer else None
+        )
+    except Exception as exc:
+        campaign.status = "FAILED"
+        campaign.failed_count = 1
+        db.commit()
+        return {
+            "success": False,
+            "status": "FAILED",
+            "failure_reason": str(exc),
+            "recipient_phone": clean_phone,
+            "recipient_name": req.recipient_name,
+            "template_name": req.template_name or "hello_world",
+            "campaign_id": campaign.id,
+            "message": f"Broadcast dispatch failed: {str(exc)}"
+        }
+
+    # 4. Process delivery result
+    if msg.status in ("SENT", "DELIVERED"):
+        campaign.status = "COMPLETED"
+        campaign.sent_count = 1
+        campaign.delivered_count = 1
+        campaign.actual_cost = msg.cost
+        campaign.attributed_revenue = 45.0
+        db.commit()
+        return {
+            "success": True,
+            "status": msg.status,
+            "provider_message_id": msg.provider_message_id,
+            "recipient_phone": clean_phone,
+            "recipient_name": req.recipient_name,
+            "template_name": req.template_name or "hello_world",
+            "campaign_id": campaign.id,
+            "cost": msg.cost,
+            "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
+            "message": f"WhatsApp broadcast successfully delivered to {clean_phone}!"
+        }
+    else:
+        campaign.status = "FAILED"
+        campaign.failed_count = 1
+        db.commit()
+        return {
+            "success": False,
+            "status": "FAILED",
+            "failure_reason": msg.failure_reason or "Meta Cloud API returned an error",
+            "recipient_phone": clean_phone,
+            "recipient_name": req.recipient_name,
+            "template_name": req.template_name or "hello_world",
+            "campaign_id": campaign.id,
+            "message": f"Meta Cloud API Error: {msg.failure_reason or 'Delivery failed'}"
+        }
 
 @router.get("/messages", response_model=List[WhatsAppMessageOut])
 def get_messages(
@@ -204,3 +508,32 @@ def export_message_logs(tenant: Tenant = Depends(get_current_tenant), db: Sessio
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=whatsapp_logs_{tenant.slug}.csv"}
     )
+
+class MockUserBroadcastRequest(BaseModel):
+    token: Optional[str] = None
+    phone_number_id: Optional[str] = "1380171298507513"
+    template_name: Optional[str] = "reminderpet "
+    language_code: Optional[str] = "en_US"
+    api_version: Optional[str] = "v25.0"
+    extra_phone_numbers: Optional[List[str]] = ["918590102027"]
+
+@router.post("/broadcast-mockuser")
+def broadcast_mockuser(
+    req: MockUserBroadcastRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Broadcasts a Meta WhatsApp template message (e.g. reminderpet ) to all customers
+    in the mockuser setup ('goagain-demo') and specified recipients like 918590102027.
+    """
+    return WhatsAppService.broadcast_to_mockuser_customers(
+        db=db,
+        token=req.token,
+        phone_number_id=req.phone_number_id or "1380171298507513",
+        template_name=req.template_name or "reminderpet ",
+        language_code=req.language_code or "en_US",
+        api_version=req.api_version or "v25.0",
+        tenant_slug="goagain-demo",
+        extra_phone_numbers=req.extra_phone_numbers
+    )
+

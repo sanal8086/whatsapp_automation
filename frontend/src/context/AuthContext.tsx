@@ -72,9 +72,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
+        // If we have tenant info from /me, use that (includes status)
+        if (meData.tenants && meData.tenants.length > 0) {
+          const matchedTenant = targetTenantId
+            ? meData.tenants.find((t: any) => t.id === targetTenantId)
+            : meData.tenants[0];
+          if (matchedTenant) {
+            setTenant(matchedTenant as Tenant);
+          }
+        }
+
+        // Only try to load full tenant data if tenant is ACTIVE
         if (targetTenantId) {
-          const tenantData = await apiRequest<Tenant>('/tenants/current');
-          setTenant(tenantData);
+          const tenantFromMe = meData.tenants?.find((t: any) => t.id === targetTenantId);
+          if (tenantFromMe && tenantFromMe.status === 'ACTIVE') {
+            try {
+              const tenantData = await apiRequest<Tenant>('/tenants/current');
+              setTenant(tenantData);
+            } catch {
+              // Keep the tenant data from /me response
+            }
+          }
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
@@ -112,3 +130,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

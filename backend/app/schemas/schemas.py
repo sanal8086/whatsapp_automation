@@ -231,7 +231,7 @@ class CustomerCreate(BaseModel):
     gender: Optional[str] = None
     date_of_birth: Optional[str] = None
     anniversary_date: Optional[str] = None
-    city: Optional[str] = None
+    address: Optional[str] = None
     marketing_consent: bool = True
     whatsapp_consent: bool = True
 
@@ -242,7 +242,7 @@ class CustomerUpdate(BaseModel):
     gender: Optional[str] = None
     date_of_birth: Optional[str] = None
     anniversary_date: Optional[str] = None
-    city: Optional[str] = None
+    address: Optional[str] = None
     marketing_consent: Optional[bool] = None
     whatsapp_consent: Optional[bool] = None
 
@@ -256,7 +256,7 @@ class CustomerOut(BaseModel):
     gender: Optional[str] = None
     date_of_birth: Optional[str] = None
     anniversary_date: Optional[str] = None
-    city: Optional[str] = None
+    address: Optional[str] = None
     source: str
     marketing_consent: bool
     whatsapp_consent: bool
@@ -273,12 +273,19 @@ class CustomerOut(BaseModel):
 class CustomerDetailOut(CustomerOut):
     loyalty_transactions: List[Any] = []
 
+class CustomerListOut(BaseModel):
+    items: List[CustomerOut]
+    total: int
+    skip: int
+    limit: int
+
 # ---------------- Segment Schemas ----------------
 
 class SegmentCreate(BaseModel):
     name: str
     description: Optional[str] = None
     rules_json: Dict[str, Any]
+    source: str = "MANUAL"  # MANUAL (owner saved) | AUTO (created by campaign service)
 
 class SegmentUpdate(BaseModel):
     name: Optional[str] = None
@@ -290,11 +297,28 @@ class SegmentOut(BaseModel):
     name: str
     description: Optional[str] = None
     rules_json: Dict[str, Any]
+    source: str = "MANUAL"
     cached_count: int
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+class SegmentSampleCustomer(BaseModel):
+    id: str
+    name: str
+    phone: str
+    points_balance: int = 0
+    current_tier: str = "BRONZE"
+    whatsapp_consent: bool = False
+
+class SegmentPreviewResponse(BaseModel):
+    explain: str
+    matched_count: int
+    reachable_count: int
+    excluded_no_consent: int
+    total_customers: int
+    sample: List[SegmentSampleCustomer] = []
 
 # ---------------- Loyalty Program & Rewards Schemas ----------------
 
@@ -308,6 +332,7 @@ class LoyaltyProgramOut(BaseModel):
     points_expiry_days: int
     welcome_bonus_points: int
     birthday_bonus_points: int
+    tier_config: Optional[dict] = None
     status: str
 
     class Config:
@@ -327,6 +352,7 @@ class RewardCreate(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    items: Optional[List[str]] = None  # combo contents, e.g. ["Pizza", "Coke"]
     points_required: int
     cash_value: float = 0.0
     terms: Optional[str] = None
@@ -337,6 +363,7 @@ class RewardUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     image_url: Optional[str] = None
+    items: Optional[List[str]] = None
     points_required: Optional[int] = None
     cash_value: Optional[float] = None
     terms: Optional[str] = None
@@ -348,6 +375,7 @@ class RewardOut(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    items: Optional[List[str]] = None
     points_required: int
     cash_value: float
     terms: Optional[str] = None
@@ -362,8 +390,10 @@ class RewardOut(BaseModel):
 class EarnPointsRequest(BaseModel):
     customer_id: str
     amount_spent: Optional[float] = 0.0
+    visits: Optional[int] = None  # VISIT_BASED programs: number of visits to credit
     points: Optional[int] = None
     description: Optional[str] = "Store visit / Purchase"
+    expiry_date: Optional[str] = None  # Custom expiry date for the awarded points (YYYY-MM-DD)
 
 class RedeemPointsRequest(BaseModel):
     customer_id: str
@@ -374,12 +404,17 @@ class RedeemPointsRequest(BaseModel):
 class LoyaltyTransactionOut(BaseModel):
     id: str
     customer_id: str
+    customer_phone: Optional[str] = None
+    customer_name: Optional[str] = None
     type: str
     points: int
     balance_before: int
     balance_after: int
     description: Optional[str] = None
     created_at: datetime
+    # Award Rewards: WhatsApp notification status for the 'hellopets' template send
+    whatsapp_sent: Optional[bool] = None
+    whatsapp_error: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -393,13 +428,18 @@ class CampaignCreate(BaseModel):
     channel: str = "WHATSAPP"
     scheduled_at: Optional[datetime] = None
     variables_mapping_json: Optional[Dict[str, Any]] = None
+    rules_json: Optional[Dict[str, Any]] = None
+    image_url: Optional[str] = None
 
 class CampaignEstimateRequest(BaseModel):
     segment_id: Optional[str] = None
     template_id: Optional[str] = None
+    rules_json: Optional[Dict[str, Any]] = None
 
 class CampaignEstimateResponse(BaseModel):
     recipients_count: int
+    matched_count: Optional[int] = None
+    excluded_no_consent: Optional[int] = None
     estimated_cost: float
     wallet_balance: float
     wallet_available: float
@@ -415,6 +455,7 @@ class CampaignOut(BaseModel):
     channel: str
     status: str
     scheduled_at: Optional[datetime] = None
+    image_url: Optional[str] = None
     recipients_count: int
     sent_count: int
     delivered_count: int
@@ -470,6 +511,9 @@ class PublicPageOut(BaseModel):
     banner_url: Optional[str] = None
     primary_color: str
     secondary_color: str
+    header_subtitle: Optional[str] = None
+    hero_cta_text: Optional[str] = None
+    how_it_works_json: Optional[Dict[str, Any]] = None
     terms_text: Optional[str] = None
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
@@ -487,6 +531,9 @@ class PublicPageUpdate(BaseModel):
     banner_url: Optional[str] = None
     primary_color: Optional[str] = None
     secondary_color: Optional[str] = None
+    header_subtitle: Optional[str] = None
+    hero_cta_text: Optional[str] = None
+    how_it_works_json: Optional[Dict[str, Any]] = None
     terms_text: Optional[str] = None
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
@@ -495,7 +542,6 @@ class PublicEnrollRequest(BaseModel):
     phone: str
     first_name: str
     last_name: Optional[str] = None
-    email: Optional[str] = None
     date_of_birth: Optional[str] = None
     whatsapp_consent: bool = True
 
@@ -529,6 +575,8 @@ class DashboardMetricsOut(BaseModel):
     recent_transactions: List[Any] = []
     insights: List[InsightItem] = []
     chart_data: List[Dict[str, Any]] = []
+    deltas: Dict[str, Optional[float]] = {}
+    range: Optional[Dict[str, Any]] = None
 
 # ----------------- Audit, Pricing & Import Schemas -----------------
 
@@ -564,10 +612,6 @@ class CustomerImportColumnMapping(BaseModel):
     phone_col: str
     first_name_col: Optional[str] = None
     last_name_col: Optional[str] = None
-    email_col: Optional[str] = None
-    dob_col: Optional[str] = None
-    spend_col: Optional[str] = None
-    city_col: Optional[str] = None
 
 class CustomerImportExecuteRequest(BaseModel):
     file_token: str

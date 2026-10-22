@@ -21,14 +21,7 @@ class CustomerService:
         return "+" + cleaned
 
     @staticmethod
-    def get_customers(
-        db: Session,
-        tenant_id: str,
-        search: Optional[str] = None,
-        tier: Optional[str] = None,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Customer]:
+    def _filtered_query(db: Session, tenant_id: str, search: Optional[str] = None, tier: Optional[str] = None):
         query = db.query(Customer).filter(Customer.tenant_id == tenant_id)
         if search:
             search_term = f"%{search}%"
@@ -38,8 +31,33 @@ class CustomerService:
                 (Customer.phone.ilike(search_term)) |
                 (Customer.email.ilike(search_term))
             )
-        customers = query.order_by(Customer.created_at.desc()).offset(skip).limit(limit).all()
-        return customers
+        if tier:
+            query = query.join(
+                CustomerLoyaltyAccount,
+                CustomerLoyaltyAccount.customer_id == Customer.id
+            ).filter(CustomerLoyaltyAccount.current_tier == tier.upper())
+        return query
+
+    @staticmethod
+    def get_customers(
+        db: Session,
+        tenant_id: str,
+        search: Optional[str] = None,
+        tier: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Customer]:
+        query = CustomerService._filtered_query(db, tenant_id, search=search, tier=tier)
+        return query.order_by(Customer.created_at.desc()).offset(skip).limit(limit).all()
+
+    @staticmethod
+    def count_customers(
+        db: Session,
+        tenant_id: str,
+        search: Optional[str] = None,
+        tier: Optional[str] = None
+    ) -> int:
+        return CustomerService._filtered_query(db, tenant_id, search=search, tier=tier).count()
 
     @staticmethod
     def create_customer(
@@ -52,7 +70,7 @@ class CustomerService:
         gender: Optional[str] = None,
         date_of_birth: Optional[str] = None,
         anniversary_date: Optional[str] = None,
-        city: Optional[str] = None,
+        address: Optional[str] = None,
         source: str = "MANUAL",
         marketing_consent: bool = True,
         whatsapp_consent: bool = True
@@ -76,7 +94,7 @@ class CustomerService:
             gender=gender,
             date_of_birth=date_of_birth,
             anniversary_date=anniversary_date,
-            city=city,
+            address=address,
             source=source,
             marketing_consent=marketing_consent,
             whatsapp_consent=whatsapp_consent,
@@ -156,17 +174,11 @@ class CustomerService:
             ).first()
 
             first_name = row.get("first_name") or row.get("name") or row.get("Name")
-            email = row.get("email") or row.get("Email")
-            city = row.get("city") or row.get("City")
-            spend = float(row.get("spend") or row.get("lifetime_spend") or 0.0)
-            visits = int(row.get("visits") or row.get("visits_count") or 1)
+            last_name = row.get("last_name") or row.get("last") or row.get("Last Name")
 
             if existing:
                 if first_name: existing.first_name = first_name
-                if email: existing.email = email
-                if city: existing.city = city
-                existing.lifetime_spend += spend
-                existing.visits_count += visits
+                if last_name and not existing.last_name: existing.last_name = last_name
                 updated += 1
             else:
                 customer = Customer(
@@ -174,12 +186,8 @@ class CustomerService:
                     phone=raw_phone,
                     phone_normalized=norm_phone,
                     first_name=first_name,
-                    email=email,
-                    city=city,
+                    last_name=last_name,
                     source="EXCEL_IMPORT",
-                    visits_count=visits,
-                    lifetime_spend=spend,
-                    last_visit_at=datetime.now(timezone.utc)
                 )
                 db.add(customer)
                 db.flush()

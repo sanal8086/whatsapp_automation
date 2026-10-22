@@ -8,6 +8,20 @@ from app.models.models import (
     CustomerLoyaltyAccount, Customer
 )
 
+DEFAULT_TIER_CONFIG = {
+    "thresholds": {
+        "SILVER": 500,
+        "GOLD": 1500,
+        "PLATINUM": 3000
+    },
+    "names": {
+        "BRONZE": "Bronze",
+        "SILVER": "Silver",
+        "GOLD": "Gold",
+        "PLATINUM": "Platinum"
+    }
+}
+
 class LoyaltyService:
     @staticmethod
     def get_or_create_program(db: Session, tenant_id: str) -> LoyaltyProgram:
@@ -23,6 +37,7 @@ class LoyaltyService:
                 points_expiry_days=365,
                 welcome_bonus_points=100,
                 birthday_bonus_points=200,
+                tier_config=DEFAULT_TIER_CONFIG,
                 status="ACTIVE"
             )
             db.add(program)
@@ -31,12 +46,22 @@ class LoyaltyService:
         return program
 
     @staticmethod
-    def calculate_tier(lifetime_earned: int) -> str:
-        if lifetime_earned >= 3000:
+    def get_tier_config(db: Session, tenant_id: str) -> dict:
+        program = LoyaltyService.get_or_create_program(db, tenant_id)
+        if program.tier_config:
+            return program.tier_config
+        return DEFAULT_TIER_CONFIG
+
+    @staticmethod
+    def calculate_tier(lifetime_earned: int, tier_config: dict = None) -> str:
+        config = tier_config or DEFAULT_TIER_CONFIG
+        thresholds = config.get("thresholds", DEFAULT_TIER_CONFIG["thresholds"])
+        
+        if lifetime_earned >= thresholds.get("PLATINUM", 3000):
             return "PLATINUM"
-        elif lifetime_earned >= 1500:
+        elif lifetime_earned >= thresholds.get("GOLD", 1500):
             return "GOLD"
-        elif lifetime_earned >= 500:
+        elif lifetime_earned >= thresholds.get("SILVER", 500):
             return "SILVER"
         return "BRONZE"
 
@@ -46,13 +71,17 @@ class LoyaltyService:
         tenant_id: str,
         customer_id: str,
         amount_spent: float = 0.0,
+        visits: int = 1,
         manual_points: Optional[int] = None,
-        description: str = "Store purchase"
+        description: str = "Store purchase",
+        expiry_date: Optional[str] = None
     ) -> LoyaltyTransaction:
         program = LoyaltyService.get_or_create_program(db, tenant_id)
         customer = db.query(Customer).filter(Customer.id == customer_id, Customer.tenant_id == tenant_id).first()
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
+
+        visits = max(1, int(visits or 1))
 
         acc = db.query(CustomerLoyaltyAccount).filter(CustomerLoyaltyAccount.customer_id == customer_id).first()
         if not acc:
@@ -73,7 +102,9 @@ class LoyaltyService:
         elif program.earn_type == "SPEND_BASED" and program.earn_spend_unit > 0:
             points_to_add = int((amount_spent / program.earn_spend_unit) * program.earn_rate)
         elif program.earn_type == "VISIT_BASED":
-            points_to_add = int(program.earn_rate)
+            visit_unit = program.earn_spend_unit if program.earn_spend_unit > 0 else 1.0
+            points_per_visit = int((1 / visit_unit) * program.earn_rate)
+            points_to_add = points_per_visit * visits
         else:
             points_to_add = int(amount_spent * 0.1)
 
@@ -82,11 +113,12 @@ class LoyaltyService:
         balance_before = acc.points_balance
         acc.points_balance += points_to_add
         acc.lifetime_earned += points_to_add
-        acc.current_tier = LoyaltyService.calculate_tier(acc.lifetime_earned)
+        tier_config = LoyaltyService.get_tier_config(db, tenant_id)
+        acc.current_tier = LoyaltyService.calculate_tier(acc.lifetime_earned, tier_config)
 
         # Update customer spend & visits
         customer.lifetime_spend += amount_spent
-        customer.visits_count += 1
+        customer.visits_count += visits
         customer.last_visit_at = datetime.now(timezone.utc)
 
         txn = LoyaltyTransaction(
@@ -98,26 +130,18 @@ class LoyaltyService:
             balance_after=acc.points_balance,
             reference_type="PURCHASE",
             description=description,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=program.points_expiry_days)
+            expires_at=(
+                datetime.fromisoformat(expiry_date).replace(tzinfo=timezone.utc)
+                if expiry_date
+                else datetime.now(timezone.utc) + timedelta(days=program.points_expiry_days)
+            )
         )
         db.add(txn)
         db.commit()
         db.refresh(txn)
 
-        # Trigger WhatsApp notification & journey
-        try:
-            from app.services.automation_runner import AutomationRunner
-            if description != "Birthday Bonus":
-                AutomationRunner.trigger_points_earned_journey(
-                    db=db,
-                    tenant_id=tenant_id,
-                    customer_id=customer_id,
-                    points_added=points_to_add,
-                    new_balance=acc.points_balance
-                )
-        except Exception:
-            pass
-
+        # WhatsApp notification is now handled by the /loyalty/earn API endpoint
+        # (sends 'hellopetsn' template via send_award_rewards_whatsapp)
         return txn
 
     @staticmethod

@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 export class ApiError extends Error {
   status: number;
@@ -39,7 +39,11 @@ export async function apiRequest<T = any>(
     let errData = null;
     try {
       errData = await res.json();
-      errMessage = errData.detail || errMessage;
+      if (typeof errData.detail === 'string') {
+        errMessage = errData.detail;
+      } else if (errData.detail && typeof errData.detail === 'object') {
+        errMessage = errData.detail.message || JSON.stringify(errData.detail);
+      }
     } catch {
       // ignore
     }
@@ -59,7 +63,14 @@ export async function apiDownload(endpoint: string, filename: string): Promise<v
 
   const res = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
   if (!res.ok) {
-    throw new Error(`Export failed: ${res.statusText}`);
+    let errMessage = `Export failed: ${res.status} ${res.statusText}`;
+    try {
+      const data = await res.json();
+      errMessage = data.detail || errMessage;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(errMessage);
   }
   const blob = await res.blob();
   const url = window.URL.createObjectURL(blob);
@@ -70,4 +81,36 @@ export async function apiDownload(endpoint: string, filename: string): Promise<v
   a.click();
   window.URL.revokeObjectURL(url);
   document.body.removeChild(a);
+}
+
+export async function apiUpload<T = any>(
+  endpoint: string,
+  formData: FormData
+): Promise<T> {
+  const token = localStorage.getItem('token');
+  const tenantId = localStorage.getItem('tenant_id');
+
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let errMessage = `Error ${res.status}: ${res.statusText}`;
+    let errData = null;
+    try {
+      errData = await res.json();
+      errMessage = errData.detail || errMessage;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(res.status, errMessage, errData);
+  }
+
+  return res.json();
 }

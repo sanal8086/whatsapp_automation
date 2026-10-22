@@ -5,16 +5,17 @@ import {
   Award,
   Phone,
   Mail,
+  MapPin,
   Calendar,
   DollarSign,
-  PlusCircle,
   Gift,
-  Send,
   CheckCircle2,
   X
 } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { CustomerDetail, LoyaltyReward } from '../../types';
+import { StatCard } from '../../components/ui';
+import { alertError } from '../../utils/alert';
 
 export const CustomerDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,21 +24,10 @@ export const CustomerDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Modals
-  const [showAwardModal, setShowAwardModal] = useState(false);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
-  const [showMsgModal, setShowMsgModal] = useState(false);
-
-  // Award points form
-  const [spendAmount, setSpendAmount] = useState('500');
-  const [manualPoints, setManualPoints] = useState('');
-  const [awardDesc, setAwardDesc] = useState('In-store purchase');
 
   // Redeem form
   const [selectedRewardId, setSelectedRewardId] = useState('');
-
-  // WhatsApp msg form
-  const [msgText, setMsgText] = useState('Hi! Thank you for dining with us today. Here are your updated loyalty points!');
-  const [msgSending, setMsgSending] = useState(false);
 
   const fetchCustomer = async () => {
     try {
@@ -62,25 +52,6 @@ export const CustomerDetailPage: React.FC = () => {
     fetchCustomer();
   }, [id]);
 
-  const handleAwardPoints = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await apiRequest('/loyalty/earn', {
-        method: 'POST',
-        body: JSON.stringify({
-          customer_id: id,
-          amount_spent: parseFloat(spendAmount) || 0,
-          points: manualPoints ? parseInt(manualPoints) : undefined,
-          description: awardDesc,
-        }),
-      });
-      setShowAwardModal(false);
-      fetchCustomer();
-    } catch (err: any) {
-      alert(err.message || 'Error awarding points');
-    }
-  };
-
   const handleRedeemReward = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -94,27 +65,7 @@ export const CustomerDetailPage: React.FC = () => {
       setShowRedeemModal(false);
       fetchCustomer();
     } catch (err: any) {
-      alert(err.message || 'Error redeeming points');
-    }
-  };
-
-  const handleSendWhatsApp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMsgSending(true);
-    try {
-      await apiRequest('/whatsapp/send-test', {
-        method: 'POST',
-        body: JSON.stringify({
-          phone: customer?.phone_normalized || customer?.phone,
-          custom_text: msgText,
-        }),
-      });
-      alert('Message sent successfully!');
-      setShowMsgModal(false);
-    } catch (err: any) {
-      alert(err.message || 'Error sending message');
-    } finally {
-      setMsgSending(false);
+      alertError(err.message || 'Error redeeming points');
     }
   };
 
@@ -137,7 +88,7 @@ export const CustomerDetailPage: React.FC = () => {
       </div>
 
       {/* Header Profile Card */}
-      <div className="glass-panel" style={{ padding: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+      <div className="card" style={{ padding: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
           <div
             style={{
@@ -150,28 +101,34 @@ export const CustomerDetailPage: React.FC = () => {
               justifyContent: 'center',
               fontSize: '1.5rem',
               fontWeight: 800,
-              color: '#fff',
-              boxShadow: 'var(--shadow-glow)',
+              color: 'var(--text-main)',
+              boxShadow: 'var(--shadow-md)',
             }}
           >
             {(customer.first_name || 'C').charAt(0)}
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-main)' }}>
+              <h1 style={{ fontSize: 28, fontWeight: 550, letterSpacing: '-0.8px', color: 'var(--text-main)', margin: 0 }}>
                 {customer.first_name ? `${customer.first_name} ${customer.last_name || ''}` : 'Guest Member'}
-              </h2>
+              </h1>
               <span className="badge badge-success">{customer.tier} Member</span>
             </div>
             <div style={{ display: 'flex', gap: '16px', marginTop: '6px', color: 'var(--text-muted)', fontSize: '0.85rem', flexWrap: 'wrap' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Phone size={14} color="#25D366" />
+                <Phone size={14} color="#10B981" />
                 {customer.phone}
               </span>
               {customer.email && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Mail size={14} />
                   {customer.email}
+                </span>
+              )}
+              {customer.address && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={14} />
+                  {customer.address}
                 </span>
               )}
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -183,14 +140,6 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={() => setShowMsgModal(true)} className="btn btn-whatsapp">
-            <Send size={15} />
-            Send WhatsApp
-          </button>
-          <button onClick={() => setShowAwardModal(true)} className="btn btn-primary">
-            <PlusCircle size={15} />
-            Award Points
-          </button>
           <button onClick={() => setShowRedeemModal(true)} className="btn btn-secondary">
             <Gift size={15} />
             Redeem Reward
@@ -198,35 +147,33 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Current Points Balance</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--success)', marginTop: '4px' }}>
-            {customer.points_balance} pts
-          </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Ready for instant redemption</span>
-        </div>
-
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total Visits</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-            {customer.visits_count}
-          </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Lifetime frequency</span>
-        </div>
-
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Lifetime Spend</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-            ₹{customer.lifetime_spend.toFixed(2)}
-          </div>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Customer revenue contribution</span>
-        </div>
+      {/* Stats Cards (Customer Profile Pastel Palette) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px' }}>
+        <StatCard
+          label="Current Points Balance"
+          value={`${customer.points_balance} pts`}
+          delta="Ready for instant redemption"
+          tone="mint-ice"
+          icon={<Award size={18} />}
+        />
+        <StatCard
+          label="Total Visits"
+          value={customer.visits_count.toString()}
+          delta="Lifetime check-in frequency"
+          tone="cornflower"
+          icon={<Calendar size={18} />}
+        />
+        <StatCard
+          label="Lifetime Spend"
+          value={`₹${customer.lifetime_spend.toFixed(2)}`}
+          delta="Customer revenue contribution"
+          tone="peach-blush"
+          icon={<DollarSign size={18} />}
+        />
       </div>
 
       {/* Transaction History Ledger */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
+      <div className="card" style={{ padding: '24px' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>
           Loyalty Points Ledger History
         </h3>
@@ -242,7 +189,7 @@ export const CustomerDetailPage: React.FC = () => {
                   justifyContent: 'space-between',
                   padding: '12px 16px',
                   borderRadius: '10px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                  backgroundColor: 'var(--bg-surface)',
                   border: '1px solid var(--border-subtle)',
                 }}
               >
@@ -292,40 +239,10 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal: Award Points */}
-      {showAwardModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '420px', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Award Loyalty Points</h3>
-              <button onClick={() => setShowAwardModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleAwardPoints}>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Bill Amount Spent (INR)</label>
-                <input type="number" className="form-input" value={spendAmount} onChange={(e) => setSpendAmount(e.target.value)} required />
-              </div>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Custom Override Points (Optional)</label>
-                <input type="number" className="form-input" placeholder="Leave empty for auto-calculate" value={manualPoints} onChange={(e) => setManualPoints(e.target.value)} />
-              </div>
-              <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Transaction Note</label>
-                <input type="text" className="form-input" value={awardDesc} onChange={(e) => setAwardDesc(e.target.value)} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setShowAwardModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Confirm & Award</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Modal: Redeem Reward */}
       {showRedeemModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '420px', padding: '24px' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="modal-content" style={{ maxWidth: '420px', padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Redeem Reward</h3>
               <button onClick={() => setShowRedeemModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}><X size={18} /></button>
@@ -344,30 +261,6 @@ export const CustomerDetailPage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button type="button" onClick={() => setShowRedeemModal(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-primary">Confirm Claim</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Send WhatsApp */}
-      {showMsgModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="glass-panel" style={{ width: '450px', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Send WhatsApp Message</h3>
-              <button onClick={() => setShowMsgModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSendWhatsApp}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Message Text</label>
-                <textarea className="form-input" rows={4} value={msgText} onChange={(e) => setMsgText(e.target.value)} required />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setShowMsgModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" disabled={msgSending} className="btn btn-whatsapp">
-                  {msgSending ? 'Sending...' : 'Send Message'}
-                </button>
               </div>
             </form>
           </div>

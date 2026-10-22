@@ -43,6 +43,7 @@ def get_public_page_data(slug: str, db: Session = Depends(get_db)):
             "name": r.name,
             "description": r.description,
             "image_url": r.image_url,
+            "items": r.items,
             "points_required": r.points_required,
             "cash_value": r.cash_value,
             "terms": r.terms
@@ -58,6 +59,9 @@ def get_public_page_data(slug: str, db: Session = Depends(get_db)):
         "banner_url": page.banner_url,
         "primary_color": page.primary_color,
         "secondary_color": page.secondary_color,
+        "header_subtitle": page.header_subtitle,
+        "hero_cta_text": page.hero_cta_text,
+        "how_it_works_json": page.how_it_works_json,
         "terms_text": page.terms_text,
         "contact_phone": page.contact_phone,
         "contact_email": page.contact_email,
@@ -109,7 +113,6 @@ def public_join_program(slug: str, req: PublicEnrollRequest, db: Session = Depen
             phone=req.phone,
             first_name=req.first_name,
             last_name=req.last_name,
-            email=req.email,
             date_of_birth=req.date_of_birth,
             source="PUBLIC_PAGE",
             marketing_consent=True,
@@ -180,6 +183,7 @@ def get_member_portal_data(slug: str, phone: str, db: Session = Depends(get_db))
                 "name": r.name,
                 "description": r.description,
                 "image_url": r.image_url,
+                "items": r.items,
                 "points_required": r.points_required,
                 "can_redeem": (acc.points_balance >= r.points_required) if acc else False
             } for r in rewards
