@@ -105,10 +105,10 @@ def run_seed():
             db.commit()
 
         # 4. Demo Merchant Tenant
-        merchant_user = db.query(User).filter(User.email == "merchant@brewandbite.com").first()
+        merchant_user = db.query(User).filter(User.email == "merchant@hellopets.com").first()
         if not merchant_user:
             merchant_user = User(
-                email="merchant@brewandbite.com",
+                email="merchant@hellopets.com",
                 name="Arjun Mehta",
                 phone="+919876500000",
                 password_hash=get_password_hash("merchant123"),
@@ -117,12 +117,12 @@ def run_seed():
             db.add(merchant_user)
             db.flush()
 
-        tenant = db.query(Tenant).filter(Tenant.slug == "brew-and-bite").first()
+        tenant = db.query(Tenant).filter(Tenant.slug == "hellopets").first()
         if not tenant:
             tenant = Tenant(
-                name="Brew & Bite Artisan Cafe",
-                slug="brew-and-bite",
-                business_type="Cafe & Bakery",
+                name="HelloPets",
+                slug="hellopets",
+                business_type="Pet Care & Grooming",
                 country="India",
                 currency="INR",
                 status="ACTIVE",
@@ -184,7 +184,7 @@ def run_seed():
                 balance_before=3500.0,
                 balance_after=3450.0,
                 reference_type="CAMPAIGN_DISPATCH",
-                description="Weekend Brew Alert WhatsApp campaign dispatch",
+                description="Weekend Paw Spa Alert WhatsApp campaign dispatch",
                 created_by="SYSTEM"
             )
             db.add_all([txn1, txn2])
@@ -193,10 +193,10 @@ def run_seed():
             wa = WhatsAppConnection(
                 tenant_id=tenant.id,
                 meta_business_id="meta_biz_99281726",
-                waba_id="waba_brew_bite_01",
+                waba_id="waba_hellopets_01",
                 phone_number_id="phone_num_998124",
                 display_phone_number="+91 98765 43210",
-                verified_name="Brew & Bite Artisan Cafe",
+                verified_name="HelloPets",
                 connection_status="CONNECTED",
                 business_verification_status="VERIFIED",
                 phone_verification_status="VERIFIED",
@@ -228,11 +228,11 @@ def run_seed():
             # Loyalty Program
             lp = LoyaltyProgram(
                 tenant_id=tenant.id,
-                name="Brew Perks Club",
-                points_currency_name="Beans",
+                name="HelloPets Rewards Club",
+                points_currency_name="Paw Points",
                 earn_type="SPEND_BASED",
                 earn_rate=1.0,
-                earn_spend_unit=10.0,  # 10 spent = 1 bean
+                earn_spend_unit=10.0,  # ₹10 spent = 1 paw point
                 points_expiry_days=365,
                 welcome_bonus_points=100,
                 birthday_bonus_points=200
@@ -241,10 +241,10 @@ def run_seed():
 
             # Rewards
             rewards_list = [
-                {"name": "Free Artisan Cappuccino", "description": "Single origin espresso with silky microfoam", "points": 150, "cash": 180.0, "img": "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=500&q=80"},
-                {"name": "₹100 Off On Any Meal", "description": "Applicable on food bills above ₹300", "points": 300, "cash": 100.0, "img": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80"},
-                {"name": "Avocado Tartine & Cold Brew", "description": "Sourdough toast with poached egg & cold brew", "points": 500, "cash": 380.0, "img": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=500&q=80"},
-                {"name": "VIP Sunday Brunch for Two", "description": "Unlimited pastries, two entrees and specialty coffee", "points": 1200, "cash": 1400.0, "img": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500&q=80"}
+                {"name": "Free Paw Grooming Session", "description": "Gentle bath, blow-dry and nail trim for your furry friend", "points": 150, "cash": 180.0, "img": "https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=500&q=80", "items": ["Bath & Blow Dry", "Nail Trim"]},
+                {"name": "₹100 Off On Any Pet Spa Package", "description": "Applicable on spa packages above ₹300", "points": 300, "cash": 100.0, "img": "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=500&q=80", "items": None},
+                {"name": "Playdate Combo: Daycare + Chew Toy", "description": "Full-day daycare with a complimentary chew toy", "points": 500, "cash": 380.0, "img": "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=500&q=80", "items": ["Full Day Daycare", "Chew Toy"]},
+                {"name": "VIP Weekend Pet Staycation", "description": "Two-night boarding with premium treats and daily walks", "points": 1200, "cash": 1400.0, "img": "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500&q=80", "items": ["2 Night Boarding", "Premium Treats", "Daily Walks"]}
             ]
             for r in rewards_list:
                 db.add(LoyaltyReward(
@@ -254,6 +254,7 @@ def run_seed():
                     points_required=r["points"],
                     cash_value=r["cash"],
                     image_url=r["img"],
+                    items=r["items"],
                     terms="Valid Monday to Sunday. Show in store at billing.",
                     stock=-1,
                     status="ACTIVE"
@@ -262,15 +263,15 @@ def run_seed():
             # Public Branded Page
             pub = PublicPage(
                 tenant_id=tenant.id,
-                slug="brew-and-bite",
-                business_name="Brew & Bite Artisan Cafe",
-                hero_title="Sip, Savor & Earn Free Coffee ☕",
-                hero_description="Join Brew Perks Club today. Earn Beans on every visit, unlock complimentary drinks and enjoy member-exclusive tastings!",
-                primary_color="#059669",  # Artisan Emerald
-                secondary_color="#D97706", # Amber Coffee
-                terms_text="Beans expire after 365 days of inactivity. Cannot be exchanged for cash.",
+                slug="hellopets",
+                business_name="HelloPets",
+                hero_title="Snuggle, Play & Earn Paw Points 🐾",
+                hero_description="Join HelloPets Rewards Club today. Earn Paw Points on every visit, unlock free grooming and enjoy member-exclusive pet perks!",
+                primary_color="#059669",  # Fresh Pet Emerald
+                secondary_color="#D97706", # Playful Amber
+                terms_text="Paw Points expire after 365 days of inactivity. Cannot be exchanged for cash.",
                 contact_phone="+91 98765 43210",
-                contact_email="hello@brewandbitecafe.com"
+                contact_email="hello@hellopets.com"
             )
             db.add(pub)
 
@@ -289,7 +290,7 @@ def run_seed():
             )
             seg2 = Segment(
                 tenant_id=tenant.id,
-                name="Coffee Enthusiasts (5+ visits)",
+                name="Frequent Visitors (5+ visits)",
                 description="Regular visitors with high loyalty frequency",
                 rules_json={
                     "operator": "AND",
@@ -335,29 +336,27 @@ def run_seed():
 
             # Sample Customers
             customer_names = [
-                ("Rohan", "Sharma", "+919811100001", "rohan@gmail.com", 12, 4200.0, 5, 420, "GOLD"),
-                ("Priya", "Kapoor", "+919811100002", "priya.k@yahoo.com", 8, 2800.0, 12, 380, "SILVER"),
-                ("Ananya", "Verma", "+919811100003", "ananya@gmail.com", 21, 9800.0, 3, 1180, "PLATINUM"),
-                ("Vikram", "Malhotra", "+919811100004", "vikram@outlook.com", 3, 950.0, 42, 195, "BRONZE"),
-                ("Sneha", "Reddy", "+919811100005", "sneha.r@gmail.com", 15, 6100.0, 2, 710, "GOLD"),
-                ("Karan", "Singhania", "+919811100006", "karan@corp.in", 2, 600.0, 55, 160, "BRONZE"),
-                ("Meera", "Joshi", "+919811100007", "meera@gmail.com", 7, 2400.0, 18, 340, "SILVER"),
-                ("Aditya", "Patel", "+919811100008", "adi.patel@gmail.com", 18, 7900.0, 4, 890, "GOLD"),
-                ("Divya", "Menon", "+919811100009", "divya@live.com", 4, 1400.0, 35, 240, "BRONZE"),
-                ("Rahul", "Nair", "+919811100010", "rahul.nair@gmail.com", 26, 12500.0, 1, 1450, "PLATINUM")
+                ("Rohan", "Sharma", "+919811100001", 12, 4200.0, 5, 420, "GOLD"),
+                ("Priya", "Kapoor", "+919811100002", 8, 2800.0, 12, 380, "SILVER"),
+                ("Ananya", "Verma", "+919811100003", 21, 9800.0, 3, 1180, "PLATINUM"),
+                ("Vikram", "Malhotra", "+919811100004", 3, 950.0, 42, 195, "BRONZE"),
+                ("Sneha", "Reddy", "+919811100005", 15, 6100.0, 2, 710, "GOLD"),
+                ("Karan", "Singhania", "+919811100006", 2, 600.0, 55, 160, "BRONZE"),
+                ("Meera", "Joshi", "+919811100007", 7, 2400.0, 18, 340, "SILVER"),
+                ("Aditya", "Patel", "+919811100008", 18, 7900.0, 4, 890, "GOLD"),
+                ("Divya", "Menon", "+919811100009", 4, 1400.0, 35, 240, "BRONZE"),
+                ("Rahul", "Nair", "+919811100010", 26, 12500.0, 1, 1450, "PLATINUM")
             ]
 
             now = datetime.now(timezone.utc)
 
-            for fn, ln, ph, em, visits, spend, days_ago, points, tier in customer_names:
+            for fn, ln, ph, visits, spend, days_ago, points, tier in customer_names:
                 cust = Customer(
                     tenant_id=tenant.id,
                     phone=ph,
                     phone_normalized=ph,
                     first_name=fn,
                     last_name=ln,
-                    email=em,
-                    city="Mumbai",
                     source="PUBLIC_PAGE" if visits > 10 else "IN_STORE",
                     marketing_consent=True,
                     whatsapp_consent=True,
@@ -386,7 +385,7 @@ def run_seed():
                     balance_before=points - int(spend / 10),
                     balance_after=points,
                     reference_type="PURCHASE",
-                    description=f"Earned Beans on visit #{visits}",
+                    description=f"Earned Paw Points on visit #{visits}",
                     created_at=now - timedelta(days=days_ago)
                 )
                 db.add(txn)
@@ -394,7 +393,7 @@ def run_seed():
             # Sample Campaigns
             camp1 = Campaign(
                 tenant_id=tenant.id,
-                name="Monsoon Hot Chocolate Fest",
+                name="Monsoon Paw Spa Fest",
                 channel="WHATSAPP",
                 status="COMPLETED",
                 recipients_count=250,
@@ -528,6 +527,27 @@ def run_seed():
                 birthday_bonus_points=300
             ))
 
+            # Demo Rewards
+            demo_rewards_list = [
+                {"name": "Starter Gift Box", "description": "Curated welcome box with store bestsellers", "points": 200, "cash": 250.0, "img": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&q=80", "items": ["Welcome Box"]},
+                {"name": "₹200 Off On Orders Above ₹999", "description": "Applicable on all in-store & online orders", "points": 400, "cash": 200.0, "img": "https://images.unsplash.com/photo-1607083206968-11611a485897?w=500&q=80", "items": None},
+                {"name": "Free Express Shipping Voucher", "description": "Unlimited express shipping for 30 days", "points": 600, "cash": 300.0, "img": "https://images.unsplash.com/photo-1556122071-e404eaedb776?w=500&q=80", "items": None},
+                {"name": "VIP Early Access Pass", "description": "First access to new drops & member-only sales", "points": 1000, "cash": 500.0, "img": "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=500&q=80", "items": ["Early Access", "Member Sales"]}
+            ]
+            for r in demo_rewards_list:
+                db.add(LoyaltyReward(
+                    tenant_id=demo_tenant.id,
+                    name=r["name"],
+                    description=r["description"],
+                    points_required=r["points"],
+                    cash_value=r["cash"],
+                    image_url=r["img"],
+                    items=r["items"],
+                    terms="Valid in-store and online. Show ID at billing.",
+                    stock=-1,
+                    status="ACTIVE"
+                ))
+
             # Demo Segments
             db.add(Segment(
                 tenant_id=demo_tenant.id,
@@ -538,22 +558,20 @@ def run_seed():
 
             # Demo Customers
             demo_custs = [
-                ("Abin", "Pet Care", "+918590102027", "client@goagain.com", 12, 5400.0, 540),
-                ("Aarav", "Patel", "+919811100101", "aarav@gmail.com", 8, 3200.0, 320),
-                ("Diya", "Sharma", "+919811100102", "diya@gmail.com", 14, 6400.0, 640),
-                ("Karan", "Singhania", "+919811100103", "karan@gmail.com", 5, 1900.0, 190),
+                ("Abin", "Pet Care", "+918590102027", 12, 5400.0, 540),
+                ("Aarav", "Patel", "+919811100101", 8, 3200.0, 320),
+                ("Diya", "Sharma", "+919811100102", 14, 6400.0, 640),
+                ("Karan", "Singhania", "+919811100103", 5, 1900.0, 190),
             ]
-            for fn, ln, ph, em, vis, sp, pts in demo_custs:
+            for fn, ln, ph, vis, sp, pts in demo_custs:
                 dc = Customer(
                     tenant_id=demo_tenant.id,
                     phone=ph,
                     phone_normalized=ph,
                     first_name=fn,
                     last_name=ln,
-                    email=em,
                     marketing_consent=True,
                     whatsapp_consent=True,
-                    city="Mumbai",
                     visits_count=vis,
                     lifetime_spend=sp,
                     last_visit_at=now - timedelta(days=2)
@@ -684,6 +702,27 @@ def run_seed():
                 birthday_bonus_points=200
             ))
 
+            # Demo Rewards
+            wervus_rewards_list = [
+                {"name": "Free Butter Croissant", "description": "Freshly baked golden croissant with any drink", "points": 120, "cash": 120.0, "img": "https://images.unsplash.com/photo-1555507036-ab1f4038808e?w=500&q=80", "items": ["Butter Croissant"]},
+                {"name": "₹100 Off On Any Meal", "description": "Applicable on food bills above ₹300", "points": 300, "cash": 100.0, "img": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80", "items": None},
+                {"name": "Cappuccino & Pastry Combo", "description": "Single-origin cappuccino with a pastry of your choice", "points": 500, "cash": 320.0, "img": "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=500&q=80", "items": ["Cappuccino", "Pastry"]},
+                {"name": "VIP Sunday Brunch for Two", "description": "Unlimited pastries, two entrees and specialty coffee", "points": 1200, "cash": 1400.0, "img": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500&q=80", "items": ["Unlimited Pastries", "2 Entrees", "2 Specialty Coffees"]}
+            ]
+            for r in wervus_rewards_list:
+                db.add(LoyaltyReward(
+                    tenant_id=wervus_tenant.id,
+                    name=r["name"],
+                    description=r["description"],
+                    points_required=r["points"],
+                    cash_value=r["cash"],
+                    image_url=r["img"],
+                    items=r["items"],
+                    terms="Valid Monday to Sunday. Show in store at billing.",
+                    stock=-1,
+                    status="ACTIVE"
+                ))
+
             # Demo Segment
             db.add(Segment(
                 tenant_id=wervus_tenant.id,
@@ -699,10 +738,8 @@ def run_seed():
                 phone_normalized="+918590102027",
                 first_name="Abin",
                 last_name="Pet Care",
-                email="client@wervus.cafe",
                 marketing_consent=True,
                 whatsapp_consent=True,
-                city="Kochi",
                 visits_count=15,
                 lifetime_spend=6500.0,
                 last_visit_at=now - timedelta(days=2)

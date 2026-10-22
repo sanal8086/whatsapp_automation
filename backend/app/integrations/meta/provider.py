@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 import httpx
+import json
 import uuid
 from app.core.config import settings
 from app.core.crypto import decrypt_secret
@@ -71,6 +72,10 @@ class WhatsAppProvider(ABC):
     def get_waba_info(self, waba_id: str, access_token: str) -> Dict[str, Any]:
         pass
 
+    @abstractmethod
+    def upload_media(self, phone_number_id: str, access_token: str, file_bytes: bytes, mime_type: str) -> Dict[str, Any]:
+        pass
+
 
 class MetaCloudApiProvider(WhatsAppProvider):
     """
@@ -121,9 +126,23 @@ class MetaCloudApiProvider(WhatsAppProvider):
             "type": "template",
             "template": template_payload
         }
+        print(f"\n[META_SEND] ===== LIVE Meta Cloud API template send =====", flush=True)
+        print(f"[META_SEND] URL: {url}", flush=True)
+        print(f"[META_SEND] phone_number_id (sender): {phone_number_id}", flush=True)
+        print(f"[META_SEND] to (number received, raw): {to_phone!r}", flush=True)
+        print(f"[META_SEND] to (number after cleaning): {clean_phone!r}", flush=True)
+        print(f"[META_SEND] template name: {template_name!r} | language: {language_code}", flush=True)
+        print(f"[META_SEND] components (msg variables): {json.dumps(components, ensure_ascii=False) if components else 'None'}", flush=True)
+        if clean_token:
+            print(f"[META_SEND] token (masked): {clean_token[:6]}...{clean_token[-4:]} (length={len(clean_token)})", flush=True)
+        else:
+            print(f"[META_SEND] token: EMPTY / failed to decrypt!", flush=True)
+        print(f"[META_SEND] FULL payload being sent:\n{json.dumps(payload, ensure_ascii=False, indent=2)}", flush=True)
         try:
             with httpx.Client(timeout=15.0) as client:
                 res = client.post(url, json=payload, headers=headers)
+                print(f"[META_SEND] HTTP status code: {res.status_code}", flush=True)
+                print(f"[META_SEND] RAW response from Meta: {res.text}", flush=True)
                 data = res.json()
                 if res.status_code >= 400:
                     err = data.get("error", {})
@@ -143,6 +162,8 @@ class MetaCloudApiProvider(WhatsAppProvider):
                         hint = " (24-hour customer messaging window expired. Use an approved template to re-engage)"
 
                     full_msg = f"{base_msg}{hint}"
+                    print(f"[META_SEND] *** SEND FAILED *** code={err_code} subcode={err_subcode} message={full_msg}", flush=True)
+                    print(f"[META_SEND] error details: {json.dumps(data, ensure_ascii=False)}", flush=True)
                     return {
                         "error": True,
                         "status_code": res.status_code,
@@ -151,8 +172,10 @@ class MetaCloudApiProvider(WhatsAppProvider):
                         "message": full_msg,
                         "details": data
                     }
+                print(f"[META_SEND] *** SEND OK *** message_id={data.get('messages', [{}])[0].get('id')}", flush=True)
                 return data
         except httpx.HTTPError as exc:
+            print(f"[META_SEND] *** NETWORK ERROR contacting Meta: {exc}", flush=True)
             return {"error": True, "message": f"Network error contacting Meta: {str(exc)}"}
 
     def send_text_message(
@@ -176,9 +199,22 @@ class MetaCloudApiProvider(WhatsAppProvider):
             "type": "text",
             "text": {"preview_url": False, "body": text}
         }
+        print(f"\n[META_SEND] ===== LIVE Meta Cloud API text send =====", flush=True)
+        print(f"[META_SEND] URL: {url}", flush=True)
+        print(f"[META_SEND] phone_number_id (sender): {phone_number_id}", flush=True)
+        print(f"[META_SEND] to (number received, raw): {to_phone!r}", flush=True)
+        print(f"[META_SEND] to (number after cleaning): {clean_phone!r}", flush=True)
+        print(f"[META_SEND] text message: {text!r}", flush=True)
+        if clean_token:
+            print(f"[META_SEND] token (masked): {clean_token[:6]}...{clean_token[-4:]} (length={len(clean_token)})", flush=True)
+        else:
+            print(f"[META_SEND] token: EMPTY / failed to decrypt!", flush=True)
+        print(f"[META_SEND] FULL payload being sent:\n{json.dumps(payload, ensure_ascii=False, indent=2)}", flush=True)
         try:
             with httpx.Client(timeout=15.0) as client:
                 res = client.post(url, json=payload, headers=headers)
+                print(f"[META_SEND] HTTP status code: {res.status_code}", flush=True)
+                print(f"[META_SEND] RAW response from Meta: {res.text}", flush=True)
                 data = res.json()
                 if res.status_code >= 400:
                     return {
@@ -352,6 +388,33 @@ class MetaCloudApiProvider(WhatsAppProvider):
         except httpx.HTTPError as exc:
             return {"error": True, "message": str(exc)}
 
+    def upload_media(self, phone_number_id: str, access_token: str, file_bytes: bytes, mime_type: str) -> Dict[str, Any]:
+        """Uploads a media file (e.g. template header image) and returns its Meta media id"""
+        url = f"{self.base_url}/{phone_number_id}/media"
+        clean_token = self._resolve_token(access_token)
+        headers = {"Authorization": f"Bearer {clean_token}"}
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                res = client.post(
+                    url,
+                    headers=headers,
+                    data={"messaging_product": "whatsapp", "file_type": mime_type},
+                    files={"file": ("image", file_bytes, mime_type)}
+                )
+                print(f"[META_MEDIA] upload attempt phone_id={phone_number_id} type={mime_type} size={len(file_bytes)} -> HTTP {res.status_code}", flush=True)
+                data = res.json()
+                if res.status_code >= 400:
+                    err = data.get("error", {})
+                    return {
+                        "error": True,
+                        "status_code": res.status_code,
+                        "message": err.get("error_user_msg") or err.get("message") or "Meta media upload failed",
+                        "details": data
+                    }
+                return data
+        except httpx.HTTPError as exc:
+            return {"error": True, "message": f"Network error uploading media: {str(exc)}"}
+
 
 class MockSandboxWhatsAppProvider(WhatsAppProvider):
     """
@@ -370,6 +433,12 @@ class MockSandboxWhatsAppProvider(WhatsAppProvider):
     ) -> Dict[str, Any]:
         msg_id = f"wamid.mock_{uuid.uuid4().hex[:16]}"
         clean_phone = to_phone.replace("+", "").replace(" ", "").replace("-", "")
+        print(f"\n[MOCK_SEND] ***** WARNING: MOCK SANDBOX PROVIDER - TEMPLATE MESSAGE NOT ACTUALLY SENT TO WHATSAPP *****", flush=True)
+        print(f"[MOCK_SEND] to (number received): {to_phone!r} -> cleaned: {clean_phone!r}", flush=True)
+        print(f"[MOCK_SEND] template: {template_name!r} | language: {language_code}", flush=True)
+        print(f"[MOCK_SEND] components (msg variables): {json.dumps(components, ensure_ascii=False) if components else 'None'}", flush=True)
+        print(f"[MOCK_SEND] fake message_id: {msg_id} (no HTTP request was made to Meta)", flush=True)
+        print(f"[MOCK_SEND] WHY MOCK? get_whatsapp_provider picked MockSandboxWhatsAppProvider (is_live_mode=False or token does not start with 'EAA' or USE_LIVE_WHATSAPP off)", flush=True)
         return {
             "messaging_product": "whatsapp",
             "contacts": [{"input": clean_phone, "wa_id": clean_phone}],
@@ -386,6 +455,11 @@ class MockSandboxWhatsAppProvider(WhatsAppProvider):
     ) -> Dict[str, Any]:
         msg_id = f"wamid.mock_{uuid.uuid4().hex[:16]}"
         clean_phone = to_phone.replace("+", "").replace(" ", "").replace("-", "")
+        print(f"\n[MOCK_SEND] ***** WARNING: MOCK SANDBOX PROVIDER - TEXT MESSAGE NOT ACTUALLY SENT TO WHATSAPP *****", flush=True)
+        print(f"[MOCK_SEND] to (number received): {to_phone!r} -> cleaned: {clean_phone!r}", flush=True)
+        print(f"[MOCK_SEND] text message: {text!r}", flush=True)
+        print(f"[MOCK_SEND] fake message_id: {msg_id} (no HTTP request was made to Meta)", flush=True)
+        print(f"[MOCK_SEND] WHY MOCK? get_whatsapp_provider picked MockSandboxWhatsAppProvider (is_live_mode=False or token does not start with 'EAA' or USE_LIVE_WHATSAPP off)", flush=True)
         return {
             "messaging_product": "whatsapp",
             "contacts": [{"input": clean_phone, "wa_id": clean_phone}],
@@ -494,6 +568,11 @@ class MockSandboxWhatsAppProvider(WhatsAppProvider):
             "account_review_status": "APPROVED"
         }
 
+    def upload_media(self, phone_number_id: str, access_token: str, file_bytes: bytes, mime_type: str) -> Dict[str, Any]:
+        media_id = f"media_mock_{uuid.uuid4().hex[:12]}"
+        print(f"[MOCK_MEDIA] ***** MOCK SANDBOX PROVIDER - MEDIA NOT ACTUALLY UPLOADED TO META ***** id={media_id}", flush=True)
+        return {"id": media_id, "sandbox_simulated": True}
+
 
 def get_whatsapp_provider(use_live: bool = False, access_token: Optional[str] = None) -> WhatsAppProvider:
     """
@@ -502,6 +581,10 @@ def get_whatsapp_provider(use_live: bool = False, access_token: Optional[str] = 
     falls back cleanly to MockSandboxWhatsAppProvider for frictionless development and sandbox testing.
     """
     resolved_token = decrypt_secret(access_token or "")
-    if use_live or settings.USE_LIVE_WHATSAPP or (resolved_token and resolved_token.startswith("EAA")):
-        return MetaCloudApiProvider(api_version=settings.META_GRAPH_API_VERSION)
+    token_is_eaa = bool(resolved_token and resolved_token.startswith("EAA"))
+    if use_live or settings.USE_LIVE_WHATSAPP or token_is_eaa:
+        chosen = MetaCloudApiProvider(api_version=settings.META_GRAPH_API_VERSION)
+        print(f"\n[PROVIDER] get_whatsapp_provider -> LIVE MetaCloudApiProvider (api={settings.META_GRAPH_API_VERSION}) | use_live={use_live}, USE_LIVE_WHATSAPP={settings.USE_LIVE_WHATSAPP}, token_starts_with_EAA={token_is_eaa}", flush=True)
+        return chosen
+    print(f"\n[PROVIDER] get_whatsapp_provider -> MOCK MockSandboxWhatsAppProvider (NOTHING WILL BE SENT) | use_live={use_live}, USE_LIVE_WHATSAPP={settings.USE_LIVE_WHATSAPP}, token_starts_with_EAA={token_is_eaa}, token_present={bool(resolved_token)}", flush=True)
     return MockSandboxWhatsAppProvider()

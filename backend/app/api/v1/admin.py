@@ -7,10 +7,12 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_platform_admin
 from app.models.models import (
     Tenant, Subscription, Wallet, WhatsAppConnection,
-    PlatformTemplate, User, TenantMember, WalletTransaction, Plan
+    PlatformTemplate, User, TenantMember, WalletTransaction, Plan,
+    PublicPage, LoyaltyProgram, LoyaltyReward
 )
 from app.schemas.schemas import (
-    AdminCreditRequest, AdminAdjustmentRequest, ManualPaymentRequest, AuditLogOut
+    AdminCreditRequest, AdminAdjustmentRequest, ManualPaymentRequest, AuditLogOut,
+    PublicPageOut, PublicPageUpdate
 )
 from app.services.wallet_service import WalletService
 from app.services.audit_service import AuditService
@@ -383,3 +385,108 @@ def extend_subscription(
         details={"days_added": days, "new_ends_at": sub.ends_at.isoformat()}
     )
     return {"status": "success", "new_ends_at": sub.ends_at}
+
+# ---------------- Public Live Page Designer (Super Admin) ----------------
+
+def _get_or_create_public_page(db: Session, tenant: Tenant) -> PublicPage:
+    page = db.query(PublicPage).filter(PublicPage.tenant_id == tenant.id).first()
+    if not page:
+        page = PublicPage(
+            tenant_id=tenant.id,
+            slug=tenant.slug,
+            business_name=tenant.name,
+            hero_title=f"Welcome to {tenant.name} Rewards",
+            hero_description="Earn points on every visit and unlock exclusive rewards!",
+        )
+        db.add(page)
+        db.commit()
+        db.refresh(page)
+    return page
+
+def _serialize_public_page(db: Session, page: PublicPage) -> dict:
+    tenant = db.query(Tenant).filter(Tenant.id == page.tenant_id).first()
+    program = db.query(LoyaltyProgram).filter(LoyaltyProgram.tenant_id == page.tenant_id).first()
+    rewards = db.query(LoyaltyReward).filter(
+        LoyaltyReward.tenant_id == page.tenant_id,
+        LoyaltyReward.status == "ACTIVE"
+    ).order_by(LoyaltyReward.points_required.asc()).all()
+
+    program_data = {
+        "name": program.name if program else "VIP Rewards",
+        "points_currency_name": program.points_currency_name if program else "Points",
+        "welcome_bonus_points": program.welcome_bonus_points if program else 100,
+        "birthday_bonus_points": program.birthday_bonus_points if program else 200,
+        "earn_type": program.earn_type if program else "SPEND_BASED"
+    }
+    rewards_data = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "description": r.description,
+            "image_url": r.image_url,
+            "items": r.items,
+            "points_required": r.points_required,
+            "cash_value": r.cash_value,
+            "terms": r.terms
+        } for r in rewards
+    ]
+    return {
+        "slug": page.slug,
+        "business_name": page.business_name,
+        "hero_title": page.hero_title,
+        "hero_description": page.hero_description,
+        "logo_url": page.logo_url,
+        "banner_url": page.banner_url,
+        "primary_color": page.primary_color,
+        "secondary_color": page.secondary_color,
+        "header_subtitle": page.header_subtitle,
+        "hero_cta_text": page.hero_cta_text,
+        "how_it_works_json": page.how_it_works_json,
+        "terms_text": page.terms_text,
+        "contact_phone": page.contact_phone,
+        "contact_email": page.contact_email,
+        "social_links_json": page.social_links_json,
+        "is_active": page.is_active,
+        "program": program_data,
+        "rewards": rewards_data
+    }
+
+@router.get("/businesses/{tenant_id}/public-page", response_model=PublicPageOut)
+def get_business_public_page(
+    tenant_id: str,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db)
+):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Business not found")
+    page = _get_or_create_public_page(db, tenant)
+    return _serialize_public_page(db, page)
+
+@router.patch("/businesses/{tenant_id}/public-page", response_model=PublicPageOut)
+def update_business_public_page(
+    tenant_id: str,
+    update: PublicPageUpdate,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db)
+):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Business not found")
+    page = _get_or_create_public_page(db, tenant)
+    for field in ("hero_title", "hero_description", "logo_url", "banner_url",
+                  "primary_color", "secondary_color", "header_subtitle",
+                  "hero_cta_text", "how_it_works_json", "terms_text",
+                  "contact_phone", "contact_email"):
+        value = getattr(update, field)
+        if value is not None:
+            setattr(page, field, value)
+    db.commit()
+    AuditService.log(
+        db=db,
+        action="PUBLIC_PAGE_UPDATED",
+        tenant_id=tenant_id,
+        user_email=user.email,
+        resource_type="PUBLIC_PAGE"
+    )
+    return _serialize_public_page(db, page)

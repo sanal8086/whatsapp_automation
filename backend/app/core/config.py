@@ -32,6 +32,24 @@ class Settings(BaseSettings):
     # Frontend Base URL
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+    # NOTE: [DEMO] Award Rewards (business-side Award Points page) WhatsApp notification settings.
+    # Sends the 'hellopets_expired' template to the customer's phone when points are awarded. Remove before production.
+    AWARD_REWARDS_WHATSAPP_TOKEN: Optional[str] = os.getenv(
+        "AWARD_REWARDS_WHATSAPP_TOKEN",
+        "EAAZAOUAFYFIABSiWJLLbrgoZAktKxuisREheCRQNzsyXPyphwAZCSwqHATSz49suNVXm7NDlPXZCOfOUZBCIuA8rbTbVSmMuAajOKuyill69qafVPf6lOHlfwmkU2D0muYuDoOCBZAeNCwtIk6wSR3xyCpBcDwZCzl1ID0XQpMe4NNBjd8MYedJZCjG6BVfmUgZDZD"
+    )
+    AWARD_REWARDS_PHONE_NUMBER_ID: str = os.getenv("AWARD_REWARDS_PHONE_NUMBER_ID", "1380171298507513")
+    AWARD_REWARDS_TEMPLATE_NAME: str = os.getenv("AWARD_REWARDS_TEMPLATE_NAME", "hellopets_expired")
+    AWARD_REWARDS_TEMPLATE_ID: str = os.getenv("AWARD_REWARDS_TEMPLATE_ID", "1804718454107225")
+    AWARD_REWARDS_LANGUAGE_CODE: str = os.getenv("AWARD_REWARDS_LANGUAGE_CODE", "en_US")
+    AWARD_REWARDS_API_VERSION: str = os.getenv("AWARD_REWARDS_API_VERSION", "v25.0")
+    # Redeem CTA template — sent after award_points_notification with a URL button to the loyalty portal
+    AWARD_REWARDS_REDEEM_TEMPLATE_NAME: str = os.getenv("AWARD_REWARDS_REDEEM_TEMPLATE_NAME", "redeem_points_cta")
+    AWARD_REWARDS_REDEEM_TEMPLATE_ID: str = os.getenv("AWARD_REWARDS_REDEEM_TEMPLATE_ID", "2531728973916320")
+    # Seconds to wait after hellopets_expired before firing redeem_points_cta
+    AWARD_REWARDS_CTA_DELAY_SECONDS: int = int(os.getenv("AWARD_REWARDS_CTA_DELAY_SECONDS", "5"))
+    # NOTE: [END DEMO]
+
     # NOTE: [DEMO] Wervus Cafe Client Demo WhatsApp Settings. Remove before production.
     WERVUS_DEMO_WHATSAPP_TOKEN: Optional[str] = os.getenv("WERVUS_DEMO_WHATSAPP_TOKEN", "")
     WERVUS_DEMO_PHONE_NUMBER_ID: str = os.getenv("WERVUS_DEMO_PHONE_NUMBER_ID", "1380171298507513")

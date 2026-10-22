@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { apiRequest } from '../../api/client';
+import { alertError } from '../../utils/alert';
 import { PublicPageData } from '../../types';
 
 export const PublicLoyaltyPage: React.FC = () => {
@@ -33,7 +34,6 @@ export const PublicLoyaltyPage: React.FC = () => {
   const [inputPhone, setInputPhone] = useState('');
   const [inputOtp, setInputOtp] = useState('');
   const [inputName, setInputName] = useState('');
-  const [inputEmail, setInputEmail] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
   // Redeeming state
@@ -88,7 +88,7 @@ export const PublicLoyaltyPage: React.FC = () => {
         setAuthStep('register');
       }
     } catch (err: any) {
-      alert(err.message || 'OTP failed');
+      alertError(err.message || 'OTP failed');
     } finally {
       setAuthLoading(false);
     }
@@ -105,7 +105,7 @@ export const PublicLoyaltyPage: React.FC = () => {
       setAuthStep('phone');
       confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
     } catch (err) {
-      alert('Verification error');
+      alertError('Verification error');
     } finally {
       setAuthLoading(false);
     }
@@ -120,7 +120,6 @@ export const PublicLoyaltyPage: React.FC = () => {
         body: JSON.stringify({
           phone: inputPhone,
           first_name: inputName,
-          email: inputEmail || undefined,
           whatsapp_consent: true,
         }),
       });
@@ -130,7 +129,7 @@ export const PublicLoyaltyPage: React.FC = () => {
       setAuthStep('phone');
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.5 } });
     } catch (err: any) {
-      alert(err.message || 'Registration failed');
+      alertError(err.message || 'Registration failed');
     } finally {
       setAuthLoading(false);
     }
@@ -152,7 +151,7 @@ export const PublicLoyaltyPage: React.FC = () => {
       setSuccessClaim(`Reward "${rewardName}" claimed! Show your QR code at the counter.`);
       fetchMember(memberPhone!);
     } catch (err: any) {
-      alert(err.message || 'Redemption failed');
+      alertError(err.message || 'Redemption failed');
     } finally {
       setRedeeming(null);
     }
@@ -210,12 +209,12 @@ export const PublicLoyaltyPage: React.FC = () => {
               <h1 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>
                 {pageData.business_name}
               </h1>
-              <span style={{ fontSize: '0.72rem', color: '#9CA3AF' }}>VIP Loyalty Club</span>
+              <span style={{ fontSize: '0.72rem', color: '#9CA3AF' }}>{pageData.header_subtitle || 'VIP Loyalty Club'}</span>
             </div>
           </div>
 
           <div>
-            {memberData ? (
+            {memberData && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>
@@ -233,26 +232,6 @@ export const PublicLoyaltyPage: React.FC = () => {
                   <LogOut size={16} />
                 </button>
               </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setAuthStep('phone');
-                  setShowAuthModal(true);
-                }}
-                style={{
-                  backgroundColor: primary,
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '8px 18px',
-                  fontSize: '0.875rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: `0 4px 14px ${primary}40`,
-                }}
-              >
-                Join / Sign In
-              </button>
             )}
           </div>
         </div>
@@ -376,9 +355,18 @@ export const PublicLoyaltyPage: React.FC = () => {
                           {r.points_required} pts
                         </span>
                       </div>
-                      <p style={{ fontSize: '0.8rem', color: '#9CA3AF', marginBottom: '16px' }}>
+                      <p style={{ fontSize: '0.8rem', color: '#9CA3AF', marginBottom: '8px' }}>
                         {r.description || 'Exclusive customer reward'}
                       </p>
+                      {Array.isArray(r.items) && r.items.length > 0 && (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {r.items.map((item: string, idx: number) => (
+                            <li key={idx} style={{ fontSize: '0.78rem', color: '#D1D5DB' }}>
+                              • {item}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
 
                       <button
                         disabled={!r.can_redeem || redeeming === r.id}
@@ -491,39 +479,32 @@ export const PublicLoyaltyPage: React.FC = () => {
                   boxShadow: `0 8px 24px ${primary}50`,
                 }}
               >
-                Join Rewards Now & Get {pageData.program?.welcome_bonus_points || 100} Pts
+                {pageData.hero_cta_text || `Join Rewards Now & Get ${pageData.program?.welcome_bonus_points || 100} Pts`}
               </button>
             </div>
 
             {/* How It Works */}
             <div>
               <h3 style={{ fontSize: '1.35rem', fontWeight: 800, textAlign: 'center', marginBottom: '28px' }}>
-                How It Works
+                {pageData.how_it_works_json?.section_title || 'How It Works'}
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
-                <div style={{ backgroundColor: 'rgba(31, 41, 55, 0.4)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, marginBottom: '14px' }}>
-                    1
+                {(pageData.how_it_works_json?.steps?.length
+                  ? pageData.how_it_works_json.steps
+                  : [
+                      { title: 'Join in 10 Seconds', description: 'Enter your mobile number and instantly receive your welcome bonus points.' },
+                      { title: 'Earn on Every Visit', description: 'Share your phone number at billing. Points get added automatically with WhatsApp receipts.' },
+                      { title: 'Unlock Free Perks', description: 'Redeem your points for delicious food items, discounts & VIP member experiences.' }
+                    ]
+                ).map((step: any, idx: number) => (
+                  <div key={idx} style={{ backgroundColor: 'rgba(31, 41, 55, 0.4)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, marginBottom: '14px' }}>
+                      {idx + 1}
+                    </div>
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px' }}>{step.title}</h4>
+                    <p style={{ fontSize: '0.85rem', color: '#9CA3AF' }}>{step.description}</p>
                   </div>
-                  <h4 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px' }}>Join in 10 Seconds</h4>
-                  <p style={{ fontSize: '0.85rem', color: '#9CA3AF' }}>Enter your mobile number and instantly receive your welcome bonus points.</p>
-                </div>
-
-                <div style={{ backgroundColor: 'rgba(31, 41, 55, 0.4)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, marginBottom: '14px' }}>
-                    2
-                  </div>
-                  <h4 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px' }}>Earn on Every Visit</h4>
-                  <p style={{ fontSize: '0.85rem', color: '#9CA3AF' }}>Share your phone number at billing. Points get added automatically with WhatsApp receipts.</p>
-                </div>
-
-                <div style={{ backgroundColor: 'rgba(31, 41, 55, 0.4)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, marginBottom: '14px' }}>
-                    3
-                  </div>
-                  <h4 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px' }}>Unlock Free Perks</h4>
-                  <p style={{ fontSize: '0.85rem', color: '#9CA3AF' }}>Redeem your points for delicious food items, discounts & VIP member experiences.</p>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -552,7 +533,16 @@ export const PublicLoyaltyPage: React.FC = () => {
                             {r.points_required} pts
                           </span>
                         </div>
-                        <p style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>{r.description}</p>
+                        <p style={{ fontSize: '0.8rem', color: '#9CA3AF', marginBottom: Array.isArray(r.items) && r.items.length > 0 ? '10px' : 0 }}>{r.description}</p>
+                        {Array.isArray(r.items) && r.items.length > 0 && (
+                          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            {r.items.map((item: string, idx: number) => (
+                              <li key={idx} style={{ fontSize: '0.75rem', color: '#D1D5DB' }}>
+                                • {item}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -624,13 +614,9 @@ export const PublicLoyaltyPage: React.FC = () => {
                 <p style={{ fontSize: '0.85rem', color: '#9CA3AF', marginBottom: '16px' }}>
                   Welcome! Tell us your name to credit your {pageData.program?.welcome_bonus_points || 100} welcome points.
                 </p>
-                <div style={{ marginBottom: '14px' }}>
+                <div style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#9CA3AF', marginBottom: '4px' }}>Your Name</label>
                   <input type="text" className="form-input" placeholder="e.g. Rohan Sharma" value={inputName} onChange={(e) => setInputName(e.target.value)} required />
-                </div>
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#9CA3AF', marginBottom: '4px' }}>Email (Optional)</label>
-                  <input type="email" className="form-input" placeholder="rohan@example.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} />
                 </div>
                 <button type="submit" disabled={authLoading} style={{ width: '100%', backgroundColor: primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '12px', fontWeight: 700, cursor: 'pointer' }}>
                   {authLoading ? 'Enrolling...' : 'Claim Welcome Points 🎉'}

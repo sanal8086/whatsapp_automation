@@ -7,6 +7,7 @@ from app.core.dependencies import get_current_tenant
 from app.models.models import Tenant, Campaign, Segment, WhatsAppTemplate
 from app.schemas.schemas import CampaignCreate, CampaignOut, CampaignEstimateRequest, CampaignEstimateResponse
 from app.services.campaign_service import CampaignService
+from app.services.rule_registry import RuleValidationError
 from app.services.import_export_service import ImportExportService
 
 router = APIRouter(prefix="/campaigns", tags=["Campaigns & Broadcasts"])
@@ -59,7 +60,10 @@ def estimate_campaign(
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db)
 ):
-    return CampaignService.estimate_campaign(db, tenant.id, req.segment_id)
+    try:
+        return CampaignService.estimate_campaign(db, tenant.id, req.segment_id, req.rules_json)
+    except RuleValidationError as exc:
+        raise HTTPException(status_code=422, detail={"message": "Invalid audience rules", "errors": exc.errors})
 
 @router.post("", response_model=CampaignOut)
 def create_campaign(
@@ -67,15 +71,21 @@ def create_campaign(
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db)
 ):
-    campaign = CampaignService.create_campaign(
-        db=db,
-        tenant_id=tenant.id,
-        name=req.name,
-        segment_id=req.segment_id,
-        template_id=req.template_id,
-        scheduled_at=req.scheduled_at,
-        variables_mapping=req.variables_mapping_json
-    )
+    print(f"\n[OFFER_RUN] POST /campaigns received: name={req.name!r}, segment_id={req.segment_id}, template_id={req.template_id}, scheduled_at={req.scheduled_at}, rules_json={req.rules_json}, tenant={tenant.id}", flush=True)
+    try:
+        campaign = CampaignService.create_campaign(
+            db=db,
+            tenant_id=tenant.id,
+            name=req.name,
+            segment_id=req.segment_id,
+            template_id=req.template_id,
+            scheduled_at=req.scheduled_at,
+            variables_mapping=req.variables_mapping_json,
+            rules_json=req.rules_json,
+            image_url=req.image_url
+        )
+    except RuleValidationError as exc:
+        raise HTTPException(status_code=422, detail={"message": "Invalid audience rules", "errors": exc.errors})
     seg = db.query(Segment).filter(Segment.id == campaign.segment_id).first() if campaign.segment_id else None
     tpl = db.query(WhatsAppTemplate).filter(WhatsAppTemplate.id == campaign.template_id).first() if campaign.template_id else None
     return {
@@ -88,6 +98,7 @@ def create_campaign(
         "channel": campaign.channel,
         "status": campaign.status,
         "scheduled_at": campaign.scheduled_at,
+        "image_url": campaign.image_url,
         "recipients_count": campaign.recipients_count,
         "sent_count": campaign.sent_count,
         "delivered_count": campaign.delivered_count,
@@ -105,7 +116,9 @@ def execute_campaign(
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db)
 ):
+    print(f"\n[OFFER_RUN] POST /campaigns/{campaign_id}/send received: tenant={tenant.id} ({tenant.name})", flush=True)
     campaign = CampaignService.execute_campaign(db, tenant.id, campaign_id)
+    print(f"[OFFER_RUN] POST /campaigns/{campaign_id}/send finished: status={campaign.status if campaign else 'NOT FOUND'}, sent={campaign.sent_count if campaign else '-'}, delivered={campaign.delivered_count if campaign else '-'}, failed={campaign.failed_count if campaign else '-'}", flush=True)
     seg = db.query(Segment).filter(Segment.id == campaign.segment_id).first() if campaign.segment_id else None
     tpl = db.query(WhatsAppTemplate).filter(WhatsAppTemplate.id == campaign.template_id).first() if campaign.template_id else None
     return {
@@ -118,6 +131,7 @@ def execute_campaign(
         "channel": campaign.channel,
         "status": campaign.status,
         "scheduled_at": campaign.scheduled_at,
+        "image_url": campaign.image_url,
         "recipients_count": campaign.recipients_count,
         "sent_count": campaign.sent_count,
         "delivered_count": campaign.delivered_count,

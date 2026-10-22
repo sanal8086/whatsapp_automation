@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import csv
 import io
 
@@ -215,18 +215,116 @@ def create_template(
     db.refresh(tpl)
     return tpl
 
+class MediaUploadOut(BaseModel):
+    media_id: str
+
+@router.post("/media", response_model=MediaUploadOut)
+def upload_media_file(
+    file: UploadFile = File(...),
+    template_id: Optional[str] = None,
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db)
+):
+    """
+    Uploads an image to the Meta Cloud API media endpoint and returns the media id.
+    This id is passed to campaigns as image_url and used as the template header media.
+    """
+    allowed = {"image/jpeg", "image/png", "image/jpg", "image/webp"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG or WebP images are supported")
+
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image exceeds Meta's 5MB limit")
+
+    conn = db.query(WhatsAppConnection).filter(WhatsAppConnection.tenant_id == tenant.id).first()
+    if not conn or conn.connection_status != "CONNECTED":
+        raise HTTPException(status_code=400, detail="WhatsApp is not connected")
+
+    # Mirror the offer-run dispatch credentials: offer_announcement runs use the
+    # demo AWARD_REWARDS credentials when configured.
+    phone_number_id = conn.phone_number_id
+    access_token = conn.access_token_encrypted
+    if template_id:
+        tpl = db.query(WhatsAppTemplate).filter(
+            WhatsAppTemplate.id == template_id,
+            WhatsAppTemplate.tenant_id == tenant.id
+        ).first()
+        if tpl and tpl.name.lower() == "offer_announcement" and settings.AWARD_REWARDS_WHATSAPP_TOKEN:
+            phone_number_id = settings.AWARD_REWARDS_PHONE_NUMBER_ID
+            access_token = settings.AWARD_REWARDS_WHATSAPP_TOKEN
+
+    provider = MetaCloudApiProvider(api_version=settings.META_GRAPH_API_VERSION)
+    mime = "image/jpeg" if file.content_type in ("image/jpg",) else file.content_type
+    res = provider.upload_media(
+        phone_number_id=phone_number_id,
+        access_token=access_token,
+        file_bytes=data,
+        mime_type=mime
+    )
+    if res.get("error") or not res.get("id"):
+        raise HTTPException(status_code=502, detail=res.get("message") or f"Meta media upload failed: {res}")
+    return {"media_id": res["id"]}
+
 @router.post("/send-test", response_model=WhatsAppMessageOut)
 def send_test_message(
     req: SendTestMessageRequest,
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db)
 ):
+    template_name = None
+    components: Optional[List[Dict[str, Any]]] = None
+
+    if req.template_id:
+        tpl = db.query(WhatsAppTemplate).filter(
+            WhatsAppTemplate.id == req.template_id,
+            WhatsAppTemplate.tenant_id == tenant.id
+        ).first()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        template_name = tpl.name
+
+        # Auto-fill body variables with generic sample values so the template
+        # renders even if the merchant never set up variable mapping
+        import re
+        var_count = len(re.findall(r"\{\{\d+\}\}", tpl.body_text or ""))
+        if var_count:
+            samples = ["Valued Member", "100", "Our Store", "31 Dec 2026", "10% OFF", "Visit us today"]
+            components = [{
+                "type": "body",
+                "parameters": [
+                    {"type": "text", "text": samples[i % len(samples)]}
+                    for i in range(var_count)
+                ]
+            }]
+
+        # If the Meta template has an IMAGE header, include its approved sample
+        # image so the test message renders exactly like the real template
+        conn_tpl = db.query(WhatsAppConnection).filter(WhatsAppConnection.tenant_id == tenant.id).first()
+        if conn_tpl and conn_tpl.waba_id:
+            try:
+                provider_tpl = MetaCloudApiProvider(api_version=settings.META_GRAPH_API_VERSION)
+                remote = provider_tpl.sync_templates(conn_tpl.waba_id, conn_tpl.access_token_encrypted or "")
+                match = next((t for t in remote if (t.get("name") or "").lower() == template_name.lower()), None)
+                header = next((c for c in (match or {}).get("components", []) if c.get("type") == "HEADER" and c.get("format") == "IMAGE"), None) if match else None
+                sample_url = ((header.get("example") or {}).get("header_handle") or [None])[0] if header else None
+                if sample_url and components:
+                    components.insert(0, {
+                        "type": "header",
+                        "parameters": [{"type": "image", "image": {"link": sample_url}}]
+                    })
+            except Exception as e:
+                print(f"[SEND_TEST] Could not resolve image header sample: {e}")
+
     msg = WhatsAppService.send_single_message(
         db=db,
         tenant_id=tenant.id,
         to_phone=req.phone,
-        template_name=req.template_id,
-        custom_text=req.custom_text
+        template_name=template_name,
+        custom_text=req.custom_text,
+        components=components
     )
     return msg
 
@@ -272,8 +370,7 @@ def broadcast_client_demo(
                 phone_normalized=clean_phone,
                 first_name=req.recipient_name or "Demo Guest",
                 marketing_consent=True,
-                whatsapp_consent=True,
-                city="Demo"
+                whatsapp_consent=True
             )
             db.add(customer)
             db.flush()

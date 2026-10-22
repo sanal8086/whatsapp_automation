@@ -42,6 +42,8 @@
   --primary-bg: #eaf8fb;
   --primary-hover: #4fc8de;
   --primary-gradient: linear-gradient(135deg, #64d3e7 0%, #a8e7ee 100%);
+  --emerald-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --amber-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
 
   /* Dashboard Card Gradients */
   --gradient-views: linear-gradient(135deg, #D9C4F2 0%, #E5C4E8 100%);
@@ -1009,6 +1011,229 @@ textarea.form-input {
   font-weight: 600;
 }
 
+/* ──────────────────────── Icon Dropdown Calendar Filter ──────────────── */
+.date-range-picker {
+  position: relative;
+  display: inline-flex;
+  width: fit-content;
+}
+
+.date-range-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.date-range-trigger:hover,
+.date-range-trigger.open {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+.date-range-trigger-mode {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--primary-bg);
+  color: var(--text-main);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.date-range-trigger.open .date-range-trigger-mode {
+  background: var(--primary);
+  color: var(--text-inverse);
+}
+
+.date-range-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  width: 300px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+  animation: fadeIn 0.15s ease;
+}
+
+.date-range-popover .period-tabs {
+  width: fit-content;
+}
+
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 2px;
+}
+
+.cal-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.cal-nav {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cal-nav:hover {
+  background: var(--primary-bg);
+  color: var(--text-main);
+}
+
+.cal-dow-row,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.cal-dow {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 4px 0;
+}
+
+.cal-cell-blank {
+  aspect-ratio: 1;
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cal-day:hover {
+  background: var(--primary-bg);
+}
+
+.cal-day.is-today {
+  border: 1px solid var(--primary);
+}
+
+.cal-day.in-range {
+  background: var(--primary-bg);
+  border-radius: 0;
+  color: var(--text-main);
+}
+
+.cal-day.is-selected {
+  background: var(--primary);
+  color: var(--text-inverse);
+  font-weight: 700;
+  border-radius: 10px;
+}
+
+.cal-year-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.cal-year-cell {
+  padding: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cal-year-cell:hover {
+  background: var(--primary-bg);
+  border-color: var(--primary);
+}
+
+.cal-year-cell.is-current {
+  border-color: rgba(100, 211, 231, 0.5);
+}
+
+.cal-year-cell.is-selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--text-inverse);
+  font-weight: 700;
+}
+
+.cal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  gap: 8px;
+}
+
+.cal-hint {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.cal-selected-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.cal-today-btn {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cal-today-btn:hover {
+  background: var(--primary-bg);
+  border-color: var(--primary);
+}
+
 /* Object / List Items — Reference Style */
 .object-item {
   height: 66px;
@@ -1407,6 +1632,21 @@ td {
   max-height: 85vh;
   overflow-y: auto;
   animation: slideUp 0.25s ease-out;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle) transparent;
+}
+
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
 }
 
 .modal-header {
@@ -1575,3 +1815,61 @@ td {
     min-height: 140px;
   }
 }
+
+/* ──────────────────────── Neutral Badge (missing definition) ──────────────────────── */
+.badge-neutral {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+/* ──────────────────────── Super Admin Dark Theme ──────────────────────── */
+/* Scoped to the Super Admin console; remaps design tokens inside the subtree */
+.admin-dark {
+  --bg-body: #0b1220;
+  --bg-app: #0b1220;
+  --bg-surface: #131b2c;
+  --bg-surface-elevated: #182238;
+  --bg-surface-hover: #1f2b45;
+  --bg-glass: rgba(19, 27, 44, 0.85);
+  --bg-glass-card: rgba(24, 34, 58, 0.8);
+
+  --border-default: #2a3650;
+  --border-subtle: #1f2940;
+  --border-focus: rgba(100, 211, 231, 0.45);
+  --border-active: #64d3e7;
+
+  --text-main: #e8edf5;
+  --text-secondary: #b6c2d6;
+  --text-muted: #8fa0ba;
+  --text-dim: #64748b;
+  --text-inverse: #0b1220;
+
+  --primary-bg: rgba(100, 211, 231, 0.12);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 18px 60px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
+  color: var(--text-main);
+}
+
+/* Invert the primary CTA so it doesn't vanish on the dark background */
+.admin-dark .btn-primary {
+  background: #e8edf5;
+  color: #0b1220;
+}
+
+.admin-dark .btn-primary:hover {
+  background: #ffffff;
+}
+
+/* Slightly lift badge colors that read as too dim on dark surfaces */
+.admin-dark .badge-whatsapp { color: #34d399; }
+.admin-dark .badge-primary  { color: #67e8f9; }
+
+/* Modal surfaces rendered inside the admin page follow the theme */
+.admin-dark .modal-overlay { background: rgba(4, 8, 16, 0.7); }

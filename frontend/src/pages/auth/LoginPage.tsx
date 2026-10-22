@@ -52,7 +52,7 @@ export const LoginPage: React.FC = () => {
   };
 
   const fillDemoMerchant = () => {
-    setEmail('merchant@brewandbite.com');
+    setEmail('merchant@hellopets.com');
     setPassword('merchant123');
     setError(null);
   };
@@ -262,7 +262,7 @@ export const LoginPage: React.FC = () => {
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Coffee size={15} color="#10B981" />
-                  Brew & Bite Cafe Merchant
+                  HelloPets Merchant
                 </span>
                 <span style={{ color: 'var(--primary-hover)', fontSize: '12px', fontWeight: 600 }}>Fill Login →</span>
               </button>
@@ -298,7 +298,7 @@ export const LoginPage: React.FC = () => {
             <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
               Don't have an account?{' '}
               <Link to="/register" style={{ color: 'var(--primary-hover)', fontWeight: 600, textDecoration: 'none' }}>
-                Start 14-Day Free Trial
+                Create account
               </Link>
             </p>
           </div>

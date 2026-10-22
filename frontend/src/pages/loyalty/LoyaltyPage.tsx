@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Award,
   Gift,
@@ -12,15 +13,28 @@ import {
   Download,
   Sparkles,
   QrCode,
-  CreditCard,
-  ChevronRight
+  CreditCard
 } from 'lucide-react';
 import { apiRequest, apiDownload } from '../../api/client';
 import { LoyaltyProgram, LoyaltyReward, LoyaltyTransaction } from '../../types';
 import { StatCard } from '../../components/ui';
+import { alertError, alertSuccess } from '../../utils/alert';
+
+type TabKey = 'rewards' | 'rules' | 'ledger';
 
 export const LoyaltyPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'rewards' | 'rules' | 'ledger'>('rewards');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const initialTab: TabKey =
+    tabParam === 'ledger' || tabParam === 'rules' || tabParam === 'rewards' ? tabParam : 'rewards';
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+
+  // Keep the tab in sync when the query param changes (e.g. dashboard "View All")
+  useEffect(() => {
+    if (tabParam === 'ledger' || tabParam === 'rules' || tabParam === 'rewards') {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   const [program, setProgram] = useState<LoyaltyProgram | null>(null);
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
   const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
@@ -32,8 +46,8 @@ export const LoyaltyPage: React.FC = () => {
   const [rewardName, setRewardName] = useState('');
   const [rewardDesc, setRewardDesc] = useState('');
   const [rewardPoints, setRewardPoints] = useState('200');
-  const [rewardCash, setRewardCash] = useState('150');
   const [rewardImg, setRewardImg] = useState('');
+  const [rewardItem, setRewardItem] = useState('');
 
   // Rules form state
   const [pointsName, setPointsName] = useState('Points');
@@ -75,6 +89,7 @@ export const LoyaltyPage: React.FC = () => {
 
   const handleSaveReward = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanedItem = rewardItem.trim();
     try {
       if (editingRewardId) {
         await apiRequest(`/loyalty/rewards/${editingRewardId}`, {
@@ -83,8 +98,8 @@ export const LoyaltyPage: React.FC = () => {
             name: rewardName,
             description: rewardDesc,
             points_required: parseInt(rewardPoints),
-            cash_value: parseFloat(rewardCash) || 0,
             image_url: rewardImg || undefined,
+            items: cleanedItem ? [cleanedItem] : [],
           }),
         });
       } else {
@@ -94,8 +109,8 @@ export const LoyaltyPage: React.FC = () => {
             name: rewardName,
             description: rewardDesc,
             points_required: parseInt(rewardPoints),
-            cash_value: parseFloat(rewardCash) || 0,
             image_url: rewardImg || undefined,
+            items: cleanedItem ? [cleanedItem] : undefined,
             stock: -1,
             expiry_days: 30,
           }),
@@ -106,11 +121,11 @@ export const LoyaltyPage: React.FC = () => {
       setRewardName('');
       setRewardDesc('');
       setRewardPoints('200');
-      setRewardCash('150');
       setRewardImg('');
+      setRewardItem('');
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Error saving reward');
+      alertError(err.message || 'Error saving reward');
     }
   };
 
@@ -130,9 +145,9 @@ export const LoyaltyPage: React.FC = () => {
         }),
       });
       setProgram(updated);
-      alert('Loyalty program rules saved!');
+      alertSuccess('Loyalty program rules saved!');
     } catch (err: any) {
-      alert(err.message || 'Error updating rules');
+      alertError(err.message || 'Error updating rules');
     } finally {
       setSavingRules(false);
     }
@@ -143,12 +158,26 @@ export const LoyaltyPage: React.FC = () => {
     setRewardName(r.name);
     setRewardDesc(r.description || '');
     setRewardPoints(String(r.points_required));
-    setRewardCash(String(r.cash_value));
     setRewardImg(r.image_url || '');
+    setRewardItem(r.items && r.items.length > 0 ? r.items[0] : '');
     setShowRewardModal(true);
   };
 
   const totalRedemptions = transactions.filter((t) => t.type === 'REDEEM').length;
+  const isVisitBased = program?.earn_type === 'VISIT_BASED';
+  const pointsPerVisit = program
+    ? Math.max(1, Math.floor((1 / (program.earn_spend_unit > 0 ? program.earn_spend_unit : 1)) * (program.earn_rate || 1)))
+    : 1;
+  const spendPerPoint = program && program.earn_rate > 0 ? program.earn_spend_unit / program.earn_rate : 10;
+
+  const rewardCostLabel = (points: number) => {
+    if (isVisitBased) {
+      const visits = Math.ceil(points / pointsPerVisit);
+      return `${visits} visit${visits === 1 ? '' : 's'}`;
+    }
+    const spend = Math.ceil(points * spendPerPoint);
+    return `₹${spend.toLocaleString('en-IN')} spent`;
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -169,8 +198,8 @@ export const LoyaltyPage: React.FC = () => {
             setRewardName('');
             setRewardDesc('');
             setRewardPoints('200');
-            setRewardCash('150');
             setRewardImg('');
+            setRewardItem('');
             setShowRewardModal(true);
           }}
           className="btn btn-dark-pill"
@@ -257,15 +286,18 @@ export const LoyaltyPage: React.FC = () => {
                   <h3 style={{ fontSize: '1.05rem', fontWeight: 600, letterSpacing: '-0.3px', color: 'var(--text-main)', marginBottom: '6px' }}>
                     {r.name}
                   </h3>
+                  {r.items && r.items.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--text-main)', marginBottom: '10px' }}>
+                      <CheckCircle2 size={13} color="var(--success)" style={{ flexShrink: 0 }} />
+                      {r.items[0]}
+                    </div>
+                  )}
                   <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.45, marginBottom: '16px' }}>
                     {r.description || 'Exclusive loyalty reward voucher for active club members.'}
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', background: 'var(--bg-surface)', padding: '5px 12px', borderRadius: '9999px', fontWeight: 600 }}>
-                    ₹{r.cash_value} value
-                  </span>
+                <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)' }}>
                   <button
                     onClick={() => openEditReward(r)}
                     className="btn btn-secondary btn-sm"
@@ -275,6 +307,9 @@ export const LoyaltyPage: React.FC = () => {
                     Edit
                   </button>
                 </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '8px', display: 'block', fontWeight: 600 }}>
+                  Unlock after {rewardCostLabel(r.points_required)}
+                </span>
               </div>
             </div>
           ))}
@@ -313,9 +348,18 @@ export const LoyaltyPage: React.FC = () => {
                 <label className="form-label">
                   Accrual Model
                 </label>
-                <select className="form-input" value={earnType} onChange={(e) => setEarnType(e.target.value)} style={{ borderRadius: '12px' }}>
+                <select
+                  className="form-input"
+                  value={earnType}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    setEarnType(nextType);
+                    setEarnUnit(nextType === 'VISIT_BASED' ? '1' : '10');
+                  }}
+                  style={{ borderRadius: '12px' }}
+                >
                   <option value="SPEND_BASED">Spend Based (Points earned per ₹ spend)</option>
-                  <option value="VISIT_BASED">Visit Based (Fixed points per visit)</option>
+                  <option value="VISIT_BASED">Visit Based (Points earned per number of visits)</option>
                 </select>
               </div>
 
@@ -328,9 +372,22 @@ export const LoyaltyPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="form-label">
-                    Per Amount Spent (₹)
+                    {earnType === 'VISIT_BASED' ? 'Per Number of Visits' : 'Per Amount Spent (₹)'}
                   </label>
-                  <input type="number" className="form-input" value={earnUnit} onChange={(e) => setEarnUnit(e.target.value)} style={{ borderRadius: '12px' }} required />
+                  <input
+                    type="number"
+                    className="form-input"
+                    min={1}
+                    value={earnUnit}
+                    onChange={(e) => setEarnUnit(e.target.value)}
+                    style={{ borderRadius: '12px' }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '4px', display: 'block' }}>
+                    {earnType === 'VISIT_BASED'
+                      ? `e.g. ${earnRate || 0} points per ${earnUnit || 0} visit${earnUnit === '1' ? '' : 's'}`
+                      : `e.g. ${earnRate || 0} point${earnRate === '1' ? '' : 's'} per ₹${earnUnit || 0} spent`}
+                  </span>
                 </div>
               </div>
 
@@ -435,7 +492,7 @@ export const LoyaltyPage: React.FC = () => {
                 try {
                   await apiDownload('/loyalty/export', 'loyalty_ledger.csv');
                 } catch (err: any) {
-                  alert(err.message || 'Export failed');
+                   alertError(err.message || 'Export failed');
                 }
               }}
               className="btn btn-secondary btn-sm"
@@ -453,36 +510,53 @@ export const LoyaltyPage: React.FC = () => {
                   <tr>
                     <th>Type</th>
                     <th>Points</th>
-                    <th>Customer Phone</th>
+                    <th>Balance After</th>
+                    <th>Customer</th>
                     <th>Description</th>
                     <th>Timestamp</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((t) => (
-                    <tr key={t.id}>
-                      <td>
-                        <span
-                          className={`badge ${t.type === 'EARN' ? 'badge-success' : t.type === 'REDEEM' ? 'badge-warning' : 'badge-info'}`}
-                          style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}
-                        >
-                          {t.type}
-                        </span>
-                      </td>
-                      <td style={{ fontWeight: 600, color: t.type === 'EARN' ? 'var(--success)' : 'var(--warning)', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
-                        {t.type === 'EARN' ? `+${t.points}` : `-${t.points}`}
-                      </td>
-                      <td style={{ fontFamily: 'monospace', color: 'var(--text-main)', fontSize: '13px' }}>
-                        {t.customer_phone || t.phone || t.customer_name || '—'}
-                      </td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-                        {t.description}
-                      </td>
-                      <td style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
-                        {new Date(t.created_at).toLocaleString()}
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                        No loyalty transactions yet. Award or redeem points to populate the ledger.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    transactions.map((t) => (
+                      <tr key={t.id}>
+                        <td>
+                          <span
+                            className={`badge ${t.type === 'EARN' ? 'badge-success' : t.type === 'REDEEM' ? 'badge-warning' : 'badge-info'}`}
+                            style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}
+                          >
+                            {t.type}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 600, color: t.type === 'EARN' ? 'var(--success)' : 'var(--warning)', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
+                          {t.type === 'EARN' || t.type === 'BONUS' ? `+${t.points}` : `-${t.points}`}
+                        </td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                          {t.balance_after ?? '—'}
+                        </td>
+                        <td>
+                          <div style={{ fontFamily: 'monospace', color: 'var(--text-main)', fontSize: '13px' }}>
+                            {t.customer_phone || '—'}
+                          </div>
+                          {t.customer_name && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{t.customer_name}</div>
+                          )}
+                        </td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                          {t.description}
+                        </td>
+                        <td style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
+                          {new Date(t.created_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -493,7 +567,7 @@ export const LoyaltyPage: React.FC = () => {
       {/* Modal: Add/Edit Reward */}
       {showRewardModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="modal-content" style={{ maxWidth: '450px', padding: '28px' }}>
+          <div className="modal-content" style={{ maxWidth: '500px', padding: '28px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>
                 {editingRewardId ? 'Edit Reward' : 'Create New Reward'}
@@ -509,15 +583,19 @@ export const LoyaltyPage: React.FC = () => {
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Description</label>
                 <input type="text" className="form-input" placeholder="Single origin espresso with fresh milk" value={rewardDesc} onChange={(e) => setRewardDesc(e.target.value)} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Points Required</label>
-                  <input type="number" className="form-input" value={rewardPoints} onChange={(e) => setRewardPoints(e.target.value)} required />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Approx Cash Value (₹)</label>
-                  <input type="number" className="form-input" value={rewardCash} onChange={(e) => setRewardCash(e.target.value)} />
-                </div>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Reward Item</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Margherita Pizza"
+                  value={rewardItem}
+                  onChange={(e) => setRewardItem(e.target.value)}
+                />
+              </div>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Points Required</label>
+                <input type="number" className="form-input" value={rewardPoints} onChange={(e) => setRewardPoints(e.target.value)} required />
               </div>
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Cover Image URL</label>

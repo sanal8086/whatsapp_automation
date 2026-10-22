@@ -2,6 +2,8 @@ import uuid
 import hmac
 import hashlib
 import json
+import time
+import httpx
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from datetime import datetime, timezone
@@ -10,7 +12,8 @@ from typing import Optional, Dict, Any, List
 from app.models.models import (
     WhatsAppConnection, WhatsAppTemplate, WhatsAppMessage,
     PlatformTemplate, WebhookEvent, Tenant, Customer, CampaignRecipient,
-    CustomerConsent, Wallet, WhatsAppOnboardingSession
+    CustomerConsent, Wallet, WhatsAppOnboardingSession,
+    CustomerLoyaltyAccount, LoyaltyTransaction
 )
 from app.services.wallet_service import WalletService
 from app.services.pricing_service import PricingService
@@ -452,6 +455,259 @@ class WhatsAppService:
         db.commit()
         db.refresh(message)
         return message
+
+    @staticmethod
+    def send_award_rewards_whatsapp(
+        db: Session,
+        tenant_id: str,
+        to_phone: str,
+        points: int,
+        balance: int,
+        customer_id: Optional[str] = None,
+        expiry_date: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Sends the WhatsApp notification for the business-side 'Award Points' page.
+
+        When a merchant clicks 'Confirm & Award', this dispatches the approved
+        'hellopets_expired' template to the customer's entered phone number,
+        announcing the awarded points.
+
+        Template body variables (filled live per send):
+          {{1}} = customer name
+          {{2}} = coins/points earned this order
+          {{3}} = current balance after the award
+          {{4}} = points valid until (expiry date)
+        Credentials are read from AWARD_REWARDS_* settings.
+        """
+        token = settings.AWARD_REWARDS_WHATSAPP_TOKEN
+        if not token:
+            return {"sent": False, "error": "AWARD_REWARDS_WHATSAPP_TOKEN is not configured"}
+
+        clean_phone = (to_phone or "").replace("+", "").replace(" ", "").replace("-", "")
+        if not clean_phone:
+            return {"sent": False, "error": "No recipient phone number provided"}
+
+        # Resolve customer first name for template variable {{1}}
+        customer_name = "pet parent"
+        if customer_id:
+            cust = db.query(Customer).filter(Customer.id == customer_id).first()
+            if cust and (cust.first_name or "").strip():
+                customer_name = cust.first_name.strip()
+
+        url = (
+            f"https://graph.facebook.com/{settings.AWARD_REWARDS_API_VERSION}"
+            f"/{settings.AWARD_REWARDS_PHONE_NUMBER_ID}/messages"
+        )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        # Format expiry date for the template variable {{4}}
+        expiry_display = "N/A"
+        if expiry_date:
+            try:
+                dt = datetime.fromisoformat(expiry_date)
+                expiry_display = dt.strftime("%d %b %Y")
+            except Exception:
+                expiry_display = expiry_date
+        else:
+            from datetime import timedelta
+            default_expiry = datetime.now(timezone.utc) + timedelta(days=30)
+            expiry_display = default_expiry.strftime("%d %b %Y")
+
+        # Build body parameters — 4 for hellopets_expired template
+        body_params = [
+            {"type": "text", "text": customer_name},
+            {"type": "text", "text": str(points)},
+            {"type": "text", "text": str(balance)},
+            {"type": "text", "text": expiry_display},
+        ]
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": clean_phone,
+            "type": "template",
+            "template": {
+                "name": settings.AWARD_REWARDS_TEMPLATE_NAME,
+                "language": {"code": settings.AWARD_REWARDS_LANGUAGE_CODE},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": body_params
+                    }
+                ]
+            }
+        }
+
+        print(
+            f"[AWARD_REWARDS] Sending '{settings.AWARD_REWARDS_TEMPLATE_NAME}' template "
+            f"to {clean_phone} for +{points} points (new balance: {balance})"
+        )
+
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                res = client.post(url, json=payload, headers=headers)
+                try:
+                    data = res.json()
+                except Exception:
+                    data = {"error": True, "message": f"HTTP {res.status_code}: {res.text}"}
+        except httpx.HTTPError as exc:
+            return {"sent": False, "error": f"Network error contacting Meta: {exc}"}
+
+        err = data.get("error")
+        err_msg = None
+        if isinstance(err, dict):
+            err_msg = err.get("error_user_msg") or err.get("message") or "Meta API Error"
+        elif isinstance(err, str):
+            err_msg = err
+
+        is_success = err is None and bool(data.get("messages"))
+        provider_msg_id = data["messages"][0]["id"] if is_success else None
+
+        # Persist message log for the tenant
+        award_msg = WhatsAppMessage(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider_message_id=provider_msg_id,
+            recipient_phone=f"+{clean_phone}",
+            message_type="TEMPLATE",
+            status="SENT" if is_success else "FAILED",
+            cost=0.0,
+            sent_at=datetime.now(timezone.utc) if is_success else None,
+            failure_reason=err_msg
+        )
+        try:
+            db.add(award_msg)
+            db.commit()
+        except Exception as e:
+            print(f"[AWARD_REWARDS] Failed to log WhatsAppMessage: {e}")
+
+        if not is_success:
+            return {"sent": False, "error": err_msg or "Meta Cloud API returned an error", "recipient_phone": clean_phone}
+
+        # Send the follow-up 'redeem_points_cta' template after a short delay.
+        # Firing it back-to-back with the award message makes Meta deliver the
+        # shorter CTA first on some devices — wait so hellopets_expired is
+        # processed (and typically delivered) before the CTA enters the queue.
+        time.sleep(settings.AWARD_REWARDS_CTA_DELAY_SECONDS)
+        cta = WhatsAppService.send_redeem_cta(db=db, tenant_id=tenant_id, customer_id=customer_id, to_phone=f"+{clean_phone}")
+
+        return {
+            "sent": True,
+            "message_id": provider_msg_id,
+            "recipient_phone": clean_phone,
+            "template_name": settings.AWARD_REWARDS_TEMPLATE_NAME,
+            "redeem_cta_sent": cta.get("sent", False),
+            "redeem_cta_error": cta.get("error")
+        }
+
+    @staticmethod
+    def send_redeem_cta(db: Session, tenant_id: str, customer_id: Optional[str], to_phone: str) -> Dict[str, Any]:
+        """
+        Sends the follow-up 'redeem_points_cta' template to the customer.
+        Called from the webhook handler after the award template (hellopets_expired)
+        is confirmed as SENT by Meta, guaranteeing message order on the phone.
+        """
+        token = settings.AWARD_REWARDS_WHATSAPP_TOKEN
+        if not token:
+            return {"sent": False, "error": "AWARD_REWARDS_WHATSAPP_TOKEN is not configured"}
+
+        clean_phone = (to_phone or "").replace("+", "").replace(" ", "").replace("-", "")
+        if not clean_phone:
+            return {"sent": False, "error": "No recipient phone number provided"}
+
+        # Resolve customer first name
+        customer_name = "pet parent"
+        balance = 0
+        expiry_display = "N/A"
+        if customer_id:
+            cust = db.query(Customer).filter(Customer.id == customer_id).first()
+            if cust and (cust.first_name or "").strip():
+                customer_name = cust.first_name.strip()
+            acc = db.query(CustomerLoyaltyAccount).filter(CustomerLoyaltyAccount.customer_id == customer_id).first()
+            if acc:
+                balance = acc.points_balance
+            last_earn = db.query(LoyaltyTransaction).filter(
+                LoyaltyTransaction.customer_id == customer_id,
+                LoyaltyTransaction.type == "EARN"
+            ).order_by(LoyaltyTransaction.created_at.desc()).first()
+            if last_earn and last_earn.expires_at:
+                expiry_display = last_earn.expires_at.strftime("%d %b %Y")
+
+        url = (
+            f"https://graph.facebook.com/{settings.AWARD_REWARDS_API_VERSION}"
+            f"/{settings.AWARD_REWARDS_PHONE_NUMBER_ID}/messages"
+        )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
+        redeem_payload = {
+            "messaging_product": "whatsapp",
+            "to": clean_phone,
+            "type": "template",
+            "template": {
+                "name": settings.AWARD_REWARDS_REDEEM_TEMPLATE_NAME,
+                "language": {"code": settings.AWARD_REWARDS_LANGUAGE_CODE},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {"type": "text", "text": customer_name},
+                            {"type": "text", "text": str(balance)},
+                            {"type": "text", "text": expiry_display}
+                        ]
+                    }
+                ]
+            }
+        }
+
+        print(
+            f"[AWARD_REWARDS] Award template confirmed sent — sending "
+            f"'{settings.AWARD_REWARDS_REDEEM_TEMPLATE_NAME}' CTA to {clean_phone} (balance: {balance}, expiry: {expiry_display})"
+        )
+
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                res = client.post(url, json=redeem_payload, headers=headers)
+                try:
+                    data = res.json()
+                except Exception:
+                    data = {"error": True, "message": f"HTTP {res.status_code}: {res.text}"}
+        except httpx.HTTPError as exc:
+            return {"sent": False, "error": f"Network error contacting Meta: {exc}"}
+
+        err = data.get("error")
+        err_msg = None
+        if isinstance(err, dict):
+            err_msg = err.get("error_user_msg") or err.get("message") or "Meta API Error"
+        elif isinstance(err, str):
+            err_msg = err
+
+        is_success = err is None and bool(data.get("messages"))
+        provider_msg_id = data["messages"][0]["id"] if is_success else None
+
+        try:
+            db.add(WhatsAppMessage(
+                tenant_id=tenant_id,
+                customer_id=customer_id,
+                provider_message_id=provider_msg_id,
+                recipient_phone=f"+{clean_phone}",
+                message_type="TEMPLATE",
+                status="SENT" if is_success else "FAILED",
+                cost=0.0,
+                sent_at=datetime.now(timezone.utc) if is_success else None,
+                failure_reason=err_msg
+            ))
+            db.commit()
+        except Exception as e:
+            print(f"[AWARD_REWARDS] Failed to log redeem CTA WhatsAppMessage: {e}")
+
+        if is_success:
+            return {"sent": True, "message_id": provider_msg_id, "recipient_phone": clean_phone}
+        return {"sent": False, "error": err_msg or "Meta Cloud API returned an error", "recipient_phone": clean_phone}
 
     @staticmethod
     def verify_webhook_signature(raw_body: bytes, signature_header: Optional[str]) -> bool:

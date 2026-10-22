@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
+from sqlalchemy import inspect, text
+
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1.api import api_router
@@ -12,11 +14,53 @@ from app.workers.campaign_dispatcher import scheduled_worker_loop
 from app.services.pricing_service import PricingService
 from app.core.database import SessionLocal
 
+
+def _ensure_columns() -> None:
+    """Lightweight schema migration for existing databases.
+
+    `Base.metadata.create_all` only creates missing tables, it never alters
+    existing ones, so columns added after the first run must be patched in here.
+    """
+    inspector = inspect(engine)
+    if "segments" in inspector.get_table_names():
+        columns = {c["name"] for c in inspector.get_columns("segments")}
+        if "source" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE segments ADD COLUMN source VARCHAR(20) NOT NULL DEFAULT 'MANUAL'"
+                ))
+
+    if "whatsapp_connections" in inspector.get_table_names():
+        columns = {c["name"] for c in inspector.get_columns("whatsapp_connections")}
+        if "is_live_mode" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE whatsapp_connections ADD COLUMN is_live_mode BOOLEAN NOT NULL DEFAULT 0"
+                ))
+
+    if "loyalty_programs" in inspector.get_table_names():
+        columns = {c["name"] for c in inspector.get_columns("loyalty_programs")}
+        if "tier_config" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE loyalty_programs ADD COLUMN tier_config TEXT"
+                ))
+
+    if "campaigns" in inspector.get_table_names():
+        columns = {c["name"] for c in inspector.get_columns("campaigns")}
+        if "image_url" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE campaigns ADD COLUMN image_url VARCHAR(1000)"
+                ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create all database tables on startup
     Base.metadata.create_all(bind=engine)
-    
+    _ensure_columns()
+
     # Seed default dynamic pricing rules if empty
     db = SessionLocal()
     try:

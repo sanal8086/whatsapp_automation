@@ -144,11 +144,11 @@ The database seeder pre-populates the system with complete business records:
 
 | Account Type | Email | Password | Role / Access |
 | :--- | :--- | :--- | :--- |
-| **Merchant Owner** | `merchant@brewandbite.com` | `merchant123` | Full Merchant Workspace for **Brew & Bite Artisan Cafe** |
+| **Merchant Owner** | `merchant@hellopets.com` | `merchant123` | Full Merchant Workspace for **HelloPets** |
 | **Platform Super Admin**| `admin@loyaltysaas.com` | `admin123` | Platform Admin Console (`/admin`) |
 
 ### Consumer Public Loyalty Portal:
-- **URL**: `http://localhost:5173/l/brew-and-bite`
+- **URL**: `http://localhost:5173/l/hellopets`
 - **Customer Phone**: `+1 555-0101` (or any customer phone)
 - **Demo OTP**: `1234`
 

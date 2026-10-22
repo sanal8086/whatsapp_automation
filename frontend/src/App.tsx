@@ -5,14 +5,14 @@ import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
+import { AwardPointsPage } from './pages/award/AwardPointsPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
 import { CustomerDetailPage } from './pages/customers/CustomerDetailPage';
 import { LoyaltyPage } from './pages/loyalty/LoyaltyPage';
 import { CampaignsPage } from './pages/campaigns/CampaignsPage';
-import { AutomationsPage } from './pages/automations/AutomationsPage';
 import { WhatsAppPage } from './pages/whatsapp/WhatsAppPage';
-import { InsightsPage } from './pages/insights/InsightsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
+import { NewOfferPage } from './pages/offers/NewOfferPage';
 import { AdminPage } from './pages/admin/AdminPage';
 import { PublicLoyaltyPage } from './pages/public/PublicLoyaltyPage';
 import { WaitingPage } from './pages/onboarding/WaitingPage';
@@ -133,14 +133,14 @@ export const App: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
+            <Route index element={<AwardPointsPage />} />
+            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="customers/:id" element={<CustomerDetailPage />} />
             <Route path="loyalty" element={<LoyaltyPage />} />
             <Route path="campaigns" element={<CampaignsPage />} />
-            <Route path="automations" element={<AutomationsPage />} />
+            <Route path="offers" element={<NewOfferPage />} />
             <Route path="whatsapp" element={<WhatsAppPage />} />
-            <Route path="insights" element={<InsightsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 

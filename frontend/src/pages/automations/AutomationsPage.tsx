@@ -19,6 +19,7 @@ import {
 import { apiRequest } from '../../api/client';
 import { Automation, WhatsAppTemplate } from '../../types';
 import { StatCard } from '../../components/ui';
+import { alertError, confirmAction } from '../../utils/alert';
 
 export const AutomationsPage: React.FC = () => {
   const [automations, setAutomations] = useState<Automation[]>([]);
@@ -61,17 +62,18 @@ export const AutomationsPage: React.FC = () => {
       });
       fetchAutomations();
     } catch (err: any) {
-      alert(err.message || 'Error updating automation');
+      alertError(err.message || 'Error updating automation');
     }
   };
 
   const handleDeleteAutomation = async (autoId: string) => {
-    if (!confirm('Are you sure you want to delete this journey?')) return;
+    const ok = await confirmAction('Delete this journey?', 'This cannot be undone.', 'Yes, delete');
+    if (!ok) return;
     try {
       await apiRequest(`/automations/${autoId}`, { method: 'DELETE' });
       fetchAutomations();
     } catch (err: any) {
-      alert(err.message || 'Error deleting automation');
+      alertError(err.message || 'Error deleting automation');
     }
   };
 
@@ -93,7 +95,7 @@ export const AutomationsPage: React.FC = () => {
       setTemplateId('');
       fetchAutomations();
     } catch (err: any) {
-      alert(err.message || 'Error creating automation');
+      alertError(err.message || 'Error creating automation');
     }
   };
 

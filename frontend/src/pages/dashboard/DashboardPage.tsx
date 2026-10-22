@@ -1,131 +1,192 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Users,
-  Award,
-  TrendingUp,
-  DollarSign,
-  MessageSquare,
-  Sparkles,
-  ArrowUpRight,
-  PlusCircle,
-  Send,
-  ExternalLink,
-  Gift,
   CheckCircle,
   CheckCircle2,
-  Clock,
-  ChevronRight,
-  Home,
+  DollarSign,
+  Gift,
+  Wallet,
+  AlertTriangle,
 } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { DashboardMetrics, LoyaltyReward } from '../../types';
+import { DashboardMetrics } from '../../types';
 import {
   StatCard,
-  PeriodTabs,
-  SearchBar,
-  CalendarButton,
-  ProfitChart,
-  PropertyList,
-  DashboardHeader,
   LoadingSpinner,
+  EmptyState,
+  DateRangePicker,
+  RangeMode,
 } from '../../components/ui';
+import {
+  startOfDay,
+  startOfWeek,
+  endOfWeek,
+  toISODate,
+  formatRangeLabel,
+} from '../../components/ui/DateRangePicker';
+
+const initialRange = (): [Date, Date] => {
+  const today = startOfDay(new Date());
+  return [startOfWeek(today), endOfWeek(today)];
+};
 
 export const DashboardPage: React.FC = () => {
   const { tenant } = useAuth();
-  const navigate = useNavigate();
 
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('Week');
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<RangeMode>('week');
+  const [[startDate, endDate], setRange] = useState<[Date, Date]>(initialRange);
 
-  const fetchDashboard = async () => {
-    try {
-      setLoading(true);
-      const data = await apiRequest<DashboardMetrics>('/insights/dashboard');
-      setMetrics(data);
-    } catch (err) {
-      console.error('Failed to load dashboard:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ISO keys drive the fetch — stable string deps, fires on every filter change
+  const startISO = toISODate(startDate);
+  const endISO = toISODate(endDate);
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await apiRequest<DashboardMetrics>(
+          `/insights/dashboard?start_date=${startISO}&end_date=${endISO}`
+        );
+        if (!cancelled) setMetrics(data);
+      } catch (err: any) {
+        console.error('Failed to load dashboard:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load dashboard data');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
     fetchDashboard();
-  }, [tenant]);
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, startISO, endISO]);
 
-  if (loading) {
-    return <LoadingSpinner message="Loading business analytics..." />;
-  }
+  const handleModeChange = (m: RangeMode) => {
+    setMode(m);
+  };
+
+  const rangeDays = useMemo(
+    () => Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1,
+    [startDate, endDate]
+  );
+
+  const formatDelta = (d?: number | null): string =>
+    d === null || d === undefined
+      ? 'No prior period data'
+      : `${d >= 0 ? '+' : ''}${d}% vs prev period`;
 
   const kpiCards = [
     {
       label: 'Customers',
       value: metrics?.total_customers?.toLocaleString() || '0',
-      delta: '+18% this month',
-      tone: 'views' as const,
+      delta: formatDelta(metrics?.deltas?.total_customers),
+      tone: 'lavender' as const,
       icon: <Users size={18} />,
-    },
-    {
-      label: 'Loyalty Members',
-      value: metrics?.loyalty_members?.toLocaleString() || '0',
-      delta: '88% enrollment',
-      tone: 'clients' as const,
-      icon: <Award size={18} />,
     },
     {
       label: 'Points Issued',
       value: metrics?.points_issued?.toLocaleString() || '0',
-      delta: '+12% this week',
-      tone: 'purchases' as const,
+      delta: formatDelta(metrics?.deltas?.points_issued),
+      tone: 'pistachio' as const,
       icon: <CheckCircle size={18} />,
+    },
+    {
+      label: 'Campaign Revenue',
+      value: `₹${(metrics?.campaign_revenue || 0).toLocaleString()}`,
+      delta: formatDelta(metrics?.deltas?.campaign_revenue),
+      tone: 'electric-ice' as const,
+      icon: <DollarSign size={18} />,
+    },
+    {
+      label: 'Points Redeemed',
+      value: metrics?.points_redeemed?.toLocaleString() || '0',
+      delta: formatDelta(metrics?.deltas?.points_redeemed),
+      tone: 'rose-milk' as const,
+      icon: <Gift size={18} />,
+    },
+    {
+      label: 'Wallet Balance',
+      value: `₹${(metrics?.wallet_balance || 0).toLocaleString()}`,
+      delta: 'Live messaging credits',
+      tone: 'apricot-cream' as const,
+      icon: <Wallet size={18} />,
     },
   ];
 
-  // Build property list items from chart data
-  const topItems = [
-    { name: 'Campaign Revenue', percent: `₹${(metrics?.campaign_revenue || 0).toLocaleString()}`, dark: true, thumbColor: '#89e0ed' },
-    { name: 'Points Redeemed', percent: (metrics?.points_redeemed || 0).toLocaleString(), thumbColor: '#d7c7ff' },
-    { name: 'Wallet Balance', percent: `₹${(metrics?.wallet_balance || 0).toLocaleString()}`, thumbColor: '#8edfe9' },
-  ];
+  const chartMeta =
+    rangeDays <= 1
+      ? { title: 'Points Velocity — Hourly', subtitle: `Points issued on ${formatRangeLabel(startDate, endDate)} (4-hour blocks)` }
+      : rangeDays <= 14
+      ? { title: `${rangeDays}-Day Points Velocity`, subtitle: 'Daily points issued to customers' }
+      : rangeDays <= 92
+      ? { title: `${rangeDays}-Day Points Velocity`, subtitle: 'Weekly points issued (7-day blocks)' }
+      : { title: 'Points Velocity by Month', subtitle: 'Points issued per calendar month' };
+
+  const maxBarPoints = Math.max(1, ...(metrics?.chart_data?.map((bar) => bar.points_issued) ?? [0]));
+
+  // SVG line-chart geometry (viewBox 0..100 mapped to the plot box)
+  const chartBars = metrics?.chart_data ?? [];
+  const chartN = chartBars.length;
+  const chartX = (i: number) => (chartN === 1 ? 50 : (i / (chartN - 1)) * 100);
+  const chartY = (v: number) => 14 + (1 - v / maxBarPoints) * 80;
+  const chartLinePath = chartBars
+    .map((bar, i) => `${i === 0 ? 'M' : 'L'} ${chartX(i).toFixed(2)} ${chartY(bar.points_issued).toFixed(2)}`)
+    .join(' ');
+  const chartAreaPath =
+    chartN > 0
+      ? `${chartLinePath} L ${chartX(chartN - 1).toFixed(2)} 100 L ${chartX(0).toFixed(2)} 100 Z`
+      : '';
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       {/* ─── Hero Header ─── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto auto',
-        gap: 28,
-        alignItems: 'start',
-        marginBottom: 8,
-      }}>
-        <div>
-          <h1
-            style={{
-              fontSize: 34,
-              lineHeight: 1.08,
-              letterSpacing: -1.1,
-              fontWeight: 500,
-              color: 'var(--text-main)',
-            }}
-          >
-            Good day, {tenant?.name || 'Partner'} 👋
-          </h1>
-          <p style={{ marginTop: 14, color: 'var(--text-muted)', fontSize: 12 }}>
-            Here's what's happening with your customer loyalty and WhatsApp campaigns
-          </p>
-        </div>
-        <SearchBar style={{ width: 190 }} />
-        <CalendarButton />
+      <div style={{ marginBottom: 8 }}>
+        <h1
+          style={{
+            fontSize: 34,
+            lineHeight: 1.08,
+            letterSpacing: -1.1,
+            fontWeight: 500,
+            color: 'var(--text-main)',
+          }}
+        >
+          Good day, {tenant?.name || 'Partner'} 👋
+        </h1>
+        <p style={{ marginTop: 14, color: 'var(--text-muted)', fontSize: 12 }}>
+          Here's what's happening with your customer loyalty and WhatsApp campaigns
+        </p>
       </div>
 
-      {/* ─── Period Tabs ─── */}
+      {/* ─── Date Range Calendar ─── */}
       <div style={{ marginBottom: 28 }}>
-        <PeriodTabs selected={period} onChange={setPeriod} />
+        <DateRangePicker
+          mode={mode}
+          startDate={startDate}
+          endDate={endDate}
+          onModeChange={handleModeChange}
+          onRangeChange={(s, e) => setRange([s, e])}
+        />
       </div>
 
+      {loading ? (
+        <LoadingSpinner message="Loading business analytics..." />
+      ) : error ? (
+        <div className="card" style={{ padding: 28, marginBottom: 28 }}>
+          <EmptyState
+            icon={<AlertTriangle size={28} />}
+            title="Could not load dashboard data"
+            description={`${error}. Please check that the backend server is running, then try again.`}
+          />
+        </div>
+      ) : (
+      <>
       {/* ─── Stat Cards ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18, marginBottom: 32 }}>
         {kpiCards.map((kpi, i) => (
@@ -133,107 +194,123 @@ export const DashboardPage: React.FC = () => {
         ))}
       </div>
 
-      {/* ─── AI Insight Banner (if available) ─── */}
-      {metrics?.insights && metrics.insights.length > 0 && (
-        <div
-          className="card"
-          style={{
-            padding: '22px 28px',
-            background: 'linear-gradient(135deg, var(--primary-bg) 0%, rgba(207, 224, 255, 0.3) 100%)',
-            border: '1px solid rgba(100, 211, 231, 0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 20,
-            flexWrap: 'wrap',
-            marginBottom: 32,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, maxWidth: 700 }}>
-            <div
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 12,
-                background: 'var(--primary-gradient)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <Sparkles size={20} color="#fff" />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span className="badge badge-primary" style={{ fontSize: '0.68rem' }}>Growth Insight</span>
-              </div>
-              <h3 style={{ fontSize: '1.02rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                {metrics.insights[0].title}
-              </h3>
-              <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                {metrics.insights[0].description}
-              </p>
-            </div>
-          </div>
-          <Link to="/app/insights" className="btn btn-primary btn-sm">
-            {metrics.insights[0].action_label}
-            <ChevronRight size={14} />
-          </Link>
-        </div>
-      )}
-
-      {/* ─── Chart Row ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 290px', gap: 42 }}>
+      {/* ─── Chart & Activity ─── */}
+      <div>
         {/* Left: Chart or Activity */}
         <div>
           {/* Point Velocity Chart */}
           <div className="card" style={{ padding: 28, marginBottom: 28 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div>
-                <h3 className="section-title">7-Day Points Velocity</h3>
-                <p className="section-subtitle">Daily points issued to customers</p>
+                <h3 className="section-title">{chartMeta.title}</h3>
+                <p className="section-subtitle">{chartMeta.subtitle}</p>
               </div>
               <span className="badge badge-success">Live</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: 170, gap: 12 }}>
-              {metrics?.chart_data?.map((bar, i) => {
-                const heightPct = Math.min(100, Math.max(25, (bar.points_issued / 500) * 100));
+            <div style={{ position: 'relative', height: 170 }}>
+              <svg
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+              >
+                <defs>
+                  <linearGradient id="pointsAreaFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(100, 211, 231, 0.32)" />
+                    <stop offset="100%" stopColor="rgba(100, 211, 231, 0)" />
+                  </linearGradient>
+                </defs>
+                {[25, 50, 75].map((gy) => (
+                  <line
+                    key={gy}
+                    x1={0}
+                    x2={100}
+                    y1={gy}
+                    y2={gy}
+                    stroke="var(--border-subtle)"
+                    strokeWidth={1}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+                {chartAreaPath && <path d={chartAreaPath} fill="url(#pointsAreaFill)" />}
+                {chartLinePath && (
+                  <path
+                    d={chartLinePath}
+                    fill="none"
+                    stroke="#64d3e7"
+                    strokeWidth={2.25}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+              </svg>
+              {chartBars.map((bar, i) => {
+                const x = chartX(i);
+                const y = chartY(bar.points_issued);
+                const isLast = i === chartN - 1;
                 return (
-                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', fontWeight: 600 }}>
-                      {bar.points_issued}
-                    </span>
-                    <div
+                  <React.Fragment key={i}>
+                    <span
                       style={{
-                        width: '100%',
-                        maxWidth: 36,
-                        height: `${heightPct}%`,
-                        background: i === (metrics.chart_data.length - 1)
-                          ? 'var(--primary-gradient)'
-                          : 'rgba(100, 211, 231, 0.35)',
-                        borderRadius: '6px 6px 2px 2px',
+                        position: 'absolute',
+                        left: `${x}%`,
+                        top: `${y}%`,
+                        transform: 'translate(-50%, calc(-100% - 10px))',
+                        fontSize: '0.68rem',
+                        fontWeight: 600,
+                        color: isLast ? 'var(--text-main)' : 'var(--text-dim)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {bar.points_issued.toLocaleString()}
+                    </span>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: `${x}%`,
+                        top: `${y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        width: isLast ? 10 : 8,
+                        height: isLast ? 10 : 8,
+                        borderRadius: '50%',
+                        background: isLast ? 'var(--primary)' : '#64d3e7',
+                        border: '2px solid var(--bg-surface-elevated)',
+                        boxShadow: isLast ? '0 0 0 4px rgba(100, 211, 231, 0.18)' : 'none',
                         transition: 'all 0.3s ease',
                       }}
                     />
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {bar.date}
-                    </span>
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>
+            <div style={{ position: 'relative', height: 18, marginTop: 10 }}>
+              {chartBars.map((bar, i) => (
+                <span
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    left: `${chartX(i)}%`,
+                    transform: 'translateX(-50%)',
+                    fontSize: '0.72rem',
+                    color: 'var(--text-muted)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {bar.date}
+                </span>
+              ))}
+            </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* Recent Activity — latest 5; full ledger via View All */}
           <div className="card" style={{ padding: 28 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div>
                 <h3 className="section-title">Recent Loyalty Activity</h3>
-                <p className="section-subtitle">Latest transactions in the points ledger</p>
+                <p className="section-subtitle">Latest 5 transactions in the points ledger</p>
               </div>
               <Link
-                to="/app/loyalty"
+                to="/app/loyalty?tab=ledger"
                 style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}
               >
                 View All →
@@ -298,49 +375,16 @@ export const DashboardPage: React.FC = () => {
                 ))
               ) : (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '24px 0' }}>
-                  No recent transactions recorded.
+                  No transactions in this date range.
                 </p>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Right: KPI Summary & Quick Actions */}
-        <div>
-          {/* Revenue Summary */}
-          <PropertyList
-            items={topItems}
-            tabs={['Revenue', 'Growth']}
-          />
-
-          {/* Quick Actions */}
-          <div style={{ marginTop: 32 }}>
-            <h3 className="section-title" style={{ marginBottom: 16 }}>Quick Actions</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Link to="/app/campaigns" className="btn btn-primary" style={{ justifyContent: 'flex-start' }}>
-                <Send size={15} />
-                Create Campaign
-              </Link>
-              <Link to="/app/customers" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }}>
-                <PlusCircle size={15} />
-                Add Customer
-              </Link>
-              {tenant && (
-                <a
-                  href={`/l/${tenant.slug}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-secondary"
-                  style={{ justifyContent: 'flex-start' }}
-                >
-                  <ExternalLink size={15} />
-                  Public Page
-                </a>
-              )}
-            </div>
-          </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };

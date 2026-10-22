@@ -37,7 +37,7 @@ export interface Customer {
   email?: string;
   gender?: string;
   date_of_birth?: string;
-  city?: string;
+  address?: string;
   source: string;
   marketing_consent: boolean;
   whatsapp_consent: boolean;
@@ -71,8 +71,9 @@ export interface LoyaltyReward {
   name: string;
   description?: string;
   image_url?: string;
+  items?: string[];
   points_required: number;
-  cash_value: number;
+  cash_value?: number;
   terms?: string;
   stock: number;
   expiry_days: number;
@@ -99,6 +100,7 @@ export interface Segment {
   description?: string;
   rules_json: any;
   cached_count: number;
+  source?: string;
   created_at: string;
 }
 
@@ -112,6 +114,7 @@ export interface Campaign {
   channel: string;
   status: string;
   scheduled_at?: string;
+  image_url?: string;
   recipients_count: number;
   sent_count: number;
   delivered_count: number;
@@ -221,6 +224,14 @@ export interface DashboardMetrics {
   recent_transactions: LoyaltyTransaction[];
   insights: InsightItem[];
   chart_data: { date: string; customers: number; points_issued: number; revenue: number }[];
+  deltas?: {
+    total_customers?: number | null;
+    loyalty_members?: number | null;
+    points_issued?: number | null;
+    points_redeemed?: number | null;
+    campaign_revenue?: number | null;
+  };
+  range?: { start: string; end: string; days: number };
 }
 
 export interface PublicPageData {
@@ -232,6 +243,12 @@ export interface PublicPageData {
   banner_url?: string;
   primary_color: string;
   secondary_color: string;
+  header_subtitle?: string;
+  hero_cta_text?: string;
+  how_it_works_json?: {
+    section_title?: string;
+    steps?: Array<{ title?: string; description?: string }>;
+  };
   terms_text?: string;
   contact_phone?: string;
   contact_email?: string;
@@ -273,5 +290,13 @@ export interface ImportPreview {
   total_rows: number;
   headers: string[];
   sample_rows: any[];
+}
+
+export interface ImportResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+  invalid: number;
+  errors: string[];
 }
 

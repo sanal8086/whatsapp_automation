@@ -1,43 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import {
-  MessageSquare,
-  Wallet as WalletIcon,
-  CheckCircle2,
-  AlertCircle,
-  Send,
-  PlusCircle,
   RefreshCw,
   Phone,
   ShieldCheck,
-  FileText,
-  Clock,
-  X,
   Download,
-  DollarSign,
-  Activity,
   Globe,
-  CheckCheck,
-  Sparkles,
-  ChevronRight,
-  Zap
+  Send as SendIcon
 } from 'lucide-react';
 import { apiRequest, apiDownload } from '../../api/client';
-import { WhatsAppConnection, WhatsAppTemplate, WhatsAppMessage, Wallet as WalletType, WalletTransaction, MessagePricing } from '../../types';
+import { WhatsAppConnection, WhatsAppTemplate, WhatsAppMessage, MessagePricing } from '../../types';
 import { StatCard } from '../../components/ui';
+import { alertError, alertSuccess, alertWarning, confirmAction } from '../../utils/alert';
 
 export const WhatsAppPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'connection' | 'templates' | 'wallet' | 'logs' | 'pricing'>('connection');
+  const [activeTab, setActiveTab] = useState<'connection' | 'templates' | 'logs' | 'pricing'>('connection');
   const [connection, setConnection] = useState<WhatsAppConnection | null>(null);
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
-  const [wallet, setWallet] = useState<WalletType | null>(null);
-  const [walletTxns, setWalletTxns] = useState<WalletTransaction[]>([]);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [pricingRules, setPricingRules] = useState<MessagePricing[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Connect Account Form
   const [connectPhone, setConnectPhone] = useState('+91 98765 43210');
-  const [connectName, setConnectName] = useState('Brew & Bite Artisan Cafe');
+  const [connectName, setConnectName] = useState('HelloPets');
   const [connectWabaId, setConnectWabaId] = useState('');
   const [connectPhoneId, setConnectPhoneId] = useState('');
   const [connectToken, setConnectToken] = useState('');
@@ -52,11 +37,10 @@ export const WhatsAppPage: React.FC = () => {
       const config = await apiRequest<{ app_id: string; config_id: string; graph_version: string }>('/whatsapp/embedded-signup/config');
       
       if (!config.app_id || config.app_id.includes('mock') || !config.config_id) {
-        const proceedMock = confirm(
-          "Meta Embedded Signup requires a registered Meta App ID and WhatsApp Embedded Signup Configuration ID in backend/.env.\\n\\n" +
-          `Configured Meta App ID: ${config.app_id}\\n` +
-          `Configured Config ID: ${config.config_id || 'Not set'}\\n\\n` +
-          "Would you like to simulate a successful Meta Embedded Signup authorization callback now to test the live handshake?"
+        const proceedMock = await confirmAction(
+          'Simulate Meta Embedded Signup?',
+          `Meta App ID: ${config.app_id}\nConfig ID: ${config.config_id || 'Not set'}\n\nSimulate a successful authorization callback to test the live handshake?`,
+          'Simulate'
         );
         if (proceedMock) {
           const res = await apiRequest<WhatsAppConnection>('/whatsapp/embedded-signup/callback', {
@@ -66,11 +50,11 @@ export const WhatsAppPage: React.FC = () => {
               waba_id: '109827364512345',
               phone_number_id: '102938475610293',
               display_phone_number: '+91 98765 43210',
-              verified_name: connectName || 'Brew & Bite Artisan Cafe'
+              verified_name: connectName || 'HelloPets'
             })
           });
           setConnection(res);
-          alert('Meta Embedded Signup handshake succeeded! Account registered and connected.');
+          alertSuccess('Meta Embedded Signup handshake succeeded! Account registered and connected.');
           fetchData();
         }
         return;
@@ -124,10 +108,10 @@ export const WhatsAppPage: React.FC = () => {
             })
           }).then((res) => {
             setConnection(res);
-            alert('Meta Embedded Signup completed successfully!');
+            alertSuccess('Meta Embedded Signup completed successfully!');
             fetchData();
           }).catch((err) => {
-            alert(err.message || 'Error finishing Embedded Signup exchange');
+            alertError(err.message || 'Error finishing Embedded Signup exchange');
           });
         }
       }, {
@@ -140,35 +124,58 @@ export const WhatsAppPage: React.FC = () => {
         }
       });
     } catch (err: any) {
-      alert(err.message || 'Embedded signup failed');
+      alertError(err.message || 'Embedded signup failed');
     } finally {
       setEmbeddedLoading(false);
     }
   };
 
-  // Test Message
-  const [testPhone, setTestPhone] = useState('+91 98111 00001');
-  const [testText, setTestText] = useState('Hello from your loyalty rewards club! Your points balance is 420.');
-  const [sendingTest, setSendingTest] = useState(false);
+  // Message Delivery Logs pagination (10 per page)
+  const LOG_PAGE_SIZE = 10;
+  const [logPage, setLogPage] = useState(0);
+  const logTotalPages = Math.max(1, Math.ceil(messages.length / LOG_PAGE_SIZE));
+  const safeLogPage = Math.min(logPage, logTotalPages - 1);
+  const pagedMessages = messages.slice(safeLogPage * LOG_PAGE_SIZE, safeLogPage * LOG_PAGE_SIZE + LOG_PAGE_SIZE);
 
-  // Topup
-  const [topupAmt, setTopupAmt] = useState('500');
+  // Per-template test send
+  const [testTemplateId, setTestTemplateId] = useState<string | null>(null);
+  const [testPhone, setTestPhone] = useState('+91 ');
+  const [testingTemplate, setTestingTemplate] = useState<string | null>(null);
+
+  const handleTestTemplate = async (templateId: string) => {
+    const phoneClean = testPhone.replace(/\s|-/g, '');
+    if (phoneClean.length < 10) { alertWarning('Please enter a valid WhatsApp number.'); return; }
+    setTestingTemplate(templateId);
+    try {
+      const msg = await apiRequest<{ status: string; failure_reason?: string }>('/whatsapp/send-test', {
+        method: 'POST',
+        body: JSON.stringify({ phone: phoneClean, template_id: templateId }),
+      });
+      if (msg.status === 'FAILED') {
+        alertError(`Test failed: ${msg.failure_reason || 'Meta rejected the message'}`);
+      } else {
+        alertSuccess('Test message dispatched! Check the customer\'s WhatsApp.');
+        setTestTemplateId(null);
+      }
+      fetchData();
+    } catch (err: any) {
+      alertError(err.message || 'Error sending test message');
+    } finally {
+      setTestingTemplate(null);
+    }
+  };
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [connData, tplData, walData, txnData, msgData, priceData] = await Promise.all([
+      const [connData, tplData, msgData, priceData] = await Promise.all([
         apiRequest<WhatsAppConnection>('/whatsapp/connection'),
         apiRequest<WhatsAppTemplate[]>('/whatsapp/templates'),
-        apiRequest<WalletType>('/wallet'),
-        apiRequest<WalletTransaction[]>('/wallet/transactions'),
         apiRequest<WhatsAppMessage[]>('/whatsapp/messages'),
         apiRequest<MessagePricing[]>('/whatsapp/pricing'),
       ]);
       setConnection(connData);
       setTemplates(tplData);
-      setWallet(walData);
-      setWalletTxns(txnData);
       setMessages(msgData);
       setPricingRules(priceData);
       setIsLiveMode(connData.is_live_mode || false);
@@ -199,22 +206,12 @@ export const WhatsAppPage: React.FC = () => {
         }),
       });
       setConnection(updated);
-      alert(isLiveMode ? 'Meta WhatsApp Cloud API v22.0 Connected (Live Mode)!' : 'Sandbox Test Connection Activated!');
+      alertSuccess(isLiveMode ? 'Meta WhatsApp Cloud API v22.0 Connected (Live Mode)!' : 'Sandbox Test Connection Activated!');
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Connection failed');
+      alertError(err.message || 'Connection failed');
     } finally {
       setConnecting(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect WhatsApp?')) return;
-    try {
-      const updated = await apiRequest<WhatsAppConnection>('/whatsapp/disconnect', { method: 'POST' });
-      setConnection(updated);
-    } catch (err: any) {
-      alert(err.message || 'Error disconnecting');
     }
   };
 
@@ -222,48 +219,12 @@ export const WhatsAppPage: React.FC = () => {
     setSyncingTemplates(true);
     try {
       const res = await apiRequest('/whatsapp/templates/sync', { method: 'POST' });
-      alert(`Synchronized ${res.synced_count} templates from Meta WABA!`);
+      alertSuccess(`Synchronized ${res.synced_count} templates from Meta WABA!`);
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Failed to sync templates from Meta');
+      alertError(err.message || 'Failed to sync templates from Meta');
     } finally {
       setSyncingTemplates(false);
-    }
-  };
-
-  const handleSendTest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSendingTest(true);
-    try {
-      await apiRequest('/whatsapp/send-test', {
-        method: 'POST',
-        body: JSON.stringify({
-          phone: testPhone,
-          custom_text: testText,
-        }),
-      });
-      alert('Test message dispatched successfully!');
-      fetchData();
-    } catch (err: any) {
-      alert(err.message || 'Error sending test message');
-    } finally {
-      setSendingTest(false);
-    }
-  };
-
-  const handleTopup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const updated = await apiRequest<WalletType>('/wallet/topup-demo', {
-        method: 'POST',
-        body: JSON.stringify({ amount: parseFloat(topupAmt) }),
-      });
-      setWallet(updated);
-      const txns = await apiRequest<WalletTransaction[]>('/wallet/transactions');
-      setWalletTxns(txns);
-      alert(`Top-up of ₹${topupAmt} added to your messaging wallet!`);
-    } catch (err: any) {
-      alert(err.message || 'Top-up error');
     }
   };
 
@@ -271,38 +232,28 @@ export const WhatsAppPage: React.FC = () => {
     try {
       await apiDownload('/whatsapp/export', 'whatsapp_message_logs.csv');
     } catch (err: any) {
-      alert(err.message || 'Export failed');
+      alertError(err.message || 'Export failed');
     }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 className="page-title">
-              WhatsApp Cloud API & Messaging Wallet
-            </h1>
-            <span className={`badge ${connection?.is_live_mode ? 'badge-whatsapp' : 'badge-info'}`}>
-              {connection?.is_live_mode ? 'Meta Live v22.0' : 'Sandbox Simulated'}
-            </span>
-          </div>
-          <p className="page-subtitle">
-            Official Meta Cloud API integration, template library, webhook event monitoring & prepaid credit ledger.
-          </p>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 className="page-title">
+            WhatsApp Cloud API
+          </h1>
+          <span className={`badge ${connection?.is_live_mode ? 'badge-whatsapp' : 'badge-info'}`}>
+            {connection?.is_live_mode ? 'Meta Live v22.0' : 'Sandbox Simulated'}
+          </span>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ backgroundColor: 'var(--bg-surface-elevated)', padding: '8px 18px', borderRadius: '9999px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: 'var(--shadow-xs)' }}>
-            <WalletIcon size={16} color="var(--primary)" />
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Wallet:</span>
-            <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>₹{wallet?.balance.toFixed(2) || '0.00'}</span>
-          </div>
-        </div>
+        <p className="page-subtitle">
+          Official Meta Cloud API integration, template library and webhook event monitoring.
+        </p>
       </div>
 
-      {/* ─── Dashboard-Style Stat Cards Row (WhatsApp Pastel Palette) ─── */}
+      {/* Dashboard-Style Stat Cards Row (WhatsApp Pastel Palette) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
         <StatCard
           label="Meta Cloud Handshake"
@@ -317,13 +268,6 @@ export const WhatsAppPage: React.FC = () => {
           delta={connection?.display_phone_number || connectPhone}
           tone="sky-aqua"
           icon={<ShieldCheck size={18} />}
-        />
-        <StatCard
-          label="Available Wallet Credits"
-          value={`₹${(wallet?.available_balance || 0).toFixed(2)}`}
-          delta={`₹${(wallet?.reserved_balance || 0).toFixed(2)} in flight`}
-          tone="peach-blush"
-          icon={<WalletIcon size={18} />}
         />
       </div>
 
@@ -340,12 +284,6 @@ export const WhatsAppPage: React.FC = () => {
           className={`subnav-tab ${activeTab === 'templates' ? 'active' : ''}`}
         >
           Templates Catalog ({templates.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('wallet')}
-          className={`subnav-tab ${activeTab === 'wallet' ? 'active' : ''}`}
-        >
-          Prepaid Wallet & Ledger
         </button>
         <button
           onClick={() => setActiveTab('logs')}
@@ -407,15 +345,6 @@ export const WhatsAppPage: React.FC = () => {
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone ID</span>
                     <p style={{ fontSize: '0.825rem', fontFamily: 'monospace', color: 'var(--text-main)' }}>{connection.phone_number_id}</p>
                   </div>
-                </div>
-
-                <div style={{ marginTop: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <button onClick={handleDisconnect} className="btn btn-danger btn-sm">
-                    Disconnect Account
-                  </button>
-                  <button onClick={() => { setIsLiveMode(!isLiveMode); }} className="btn btn-secondary btn-sm">
-                    Switch to {connection.is_live_mode ? 'Sandbox Mode' : 'Live Mode'}
-                  </button>
                 </div>
               </div>
             </div>
@@ -515,55 +444,6 @@ export const WhatsAppPage: React.FC = () => {
               </form>
             </div>
           )}
-
-          {/* Test Message Box with Live WhatsApp Phone Chat Preview */}
-          <div className="card" style={{ padding: '32px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 600, letterSpacing: '-0.3px' }}>Dispatch Test WhatsApp</h3>
-                <span className="badge badge-whatsapp">Live Sandbox</span>
-              </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '18px' }}>
-                Verify connectivity by dispatching a real-time test message with simulated chat balloon preview.
-              </p>
-
-              <form onSubmit={handleSendTest}>
-                <div style={{ marginBottom: '14px' }}>
-                  <label className="form-label">Recipient Mobile Number</label>
-                  <input type="tel" className="form-input" style={{ borderRadius: '12px' }} value={testPhone} onChange={(e) => setTestPhone(e.target.value)} required />
-                </div>
-                <div style={{ marginBottom: '18px' }}>
-                  <label className="form-label">Test Message Content</label>
-                  <textarea className="form-input" style={{ borderRadius: '12px' }} rows={3} value={testText} onChange={(e) => setTestText(e.target.value)} required />
-                </div>
-
-                {/* Simulated WhatsApp Phone Chat Preview */}
-                <div className="chat-preview-box" style={{ marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Phone size={14} color="#fff" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#111b21' }}>{connection?.verified_name || connectName}</div>
-                      <div style={{ fontSize: '10px', color: '#667781' }}>Official Business Account</div>
-                    </div>
-                  </div>
-                  <div className="chat-bubble-wa">
-                    <p style={{ margin: 0, wordBreak: 'break-word' }}>{testText || 'Type a message to preview...'}</p>
-                    <div className="chat-bubble-wa-meta">
-                      <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      <CheckCheck size={14} color="#53bdeb" />
-                    </div>
-                  </div>
-                </div>
-
-                <button type="submit" disabled={sendingTest} className="btn btn-whatsapp" style={{ width: '100%', padding: '12px', justifyContent: 'center' }}>
-                  <Send size={15} />
-                  {sendingTest ? 'Sending Message...' : 'Send WhatsApp Message'}
-                </button>
-              </form>
-            </div>
-          </div>
         </div>
       )}
 
@@ -597,17 +477,49 @@ export const WhatsAppPage: React.FC = () => {
                     <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', whiteSpace: 'pre-line', lineHeight: 1.5 }}>{tpl.body_text}</p>
                     {tpl.footer_text && <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '8px' }}>{tpl.footer_text}</p>}
                   </div>
+
+                  {testTemplateId === tpl.id && (
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); handleTestTemplate(tpl.id); }}
+                      style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}
+                    >
+                      <input
+                        type="tel"
+                        className="form-input"
+                        placeholder="+91 98765 43210"
+                        value={testPhone}
+                        onChange={(e) => setTestPhone(e.target.value)}
+                        autoFocus
+                        style={{ borderRadius: '10px', flex: 1, padding: '7px 12px', fontSize: '0.8rem' }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={testingTemplate === tpl.id}
+                        className="btn btn-whatsapp"
+                        style={{ padding: '7px 14px', fontSize: '0.78rem', flexShrink: 0 }}
+                      >
+                        <SendIcon size={13} />
+                        {testingTemplate === tpl.id ? 'Sending...' : 'Send Test'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTestTemplateId(null)}
+                        className="btn btn-secondary"
+                        style={{ padding: '7px 12px', fontSize: '0.78rem' }}
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button
-                    onClick={() => {
-                      setTestText(tpl.body_text.replace('{{1}}', 'Friend').replace('{{2}}', '100').replace('{{3}}', 'Our Store'));
-                      setActiveTab('connection');
-                    }}
+                    onClick={() => setTestTemplateId(testTemplateId === tpl.id ? null : tpl.id)}
                     className="btn btn-secondary btn-sm"
                     style={{ padding: '6px 16px', fontSize: '0.75rem' }}
                   >
+                    <SendIcon size={12} />
                     Test Template
                   </button>
                 </div>
@@ -617,74 +529,7 @@ export const WhatsAppPage: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Wallet */}
-      {activeTab === 'wallet' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-            <StatCard
-              label="Prepaid Balance"
-              value={`₹${(wallet?.balance || 0).toFixed(2)}`}
-              delta={`Reserved: ₹${(wallet?.reserved_balance || 0).toFixed(2)}`}
-              tone="butter"
-              icon={<WalletIcon size={18} />}
-            />
-            <StatCard
-              label="Available Credits"
-              value={`₹${(wallet?.available_balance || 0).toFixed(2)}`}
-              delta="Safe to dispatch campaigns"
-              tone="electric-ice"
-              icon={<CheckCircle2 size={18} />}
-            />
-            <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', borderRadius: '24px' }}>
-              <div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Instant Top-Up Demo</span>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '4px' }}>Recharge prepaid balance to dispatch WhatsApp campaigns.</p>
-              </div>
-              <form onSubmit={handleTopup} style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-                <input type="number" className="form-input" style={{ width: '120px', borderRadius: '9999px' }} value={topupAmt} onChange={(e) => setTopupAmt(e.target.value)} required />
-                <button type="submit" className="btn btn-dark-pill" style={{ padding: '8px 20px', flex: 1 }}>
-                  + Topup ₹{topupAmt}
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* Ledger Table */}
-          <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', fontWeight: 700 }}>
-              Immutable Wallet Transactions Audit Trail
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-dim)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '14px 18px' }}>Type</th>
-                  <th style={{ padding: '14px 18px' }}>Amount</th>
-                  <th style={{ padding: '14px 18px' }}>Balance After</th>
-                  <th style={{ padding: '14px 18px' }}>Description</th>
-                  <th style={{ padding: '14px 18px' }}>Timestamp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {walletTxns.map((t) => (
-                  <tr key={t.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '14px 18px' }}>
-                      <span className={`badge ${t.type === 'CREDIT' ? 'badge-success' : 'badge-danger'}`}>{t.type}</span>
-                    </td>
-                    <td style={{ padding: '14px 18px', fontWeight: 700, color: t.type === 'CREDIT' ? 'var(--success)' : 'var(--danger)' }}>
-                      {t.type === 'CREDIT' ? `+₹${t.amount.toFixed(2)}` : `-₹${t.amount.toFixed(2)}`}
-                    </td>
-                    <td style={{ padding: '14px 18px', fontWeight: 600 }}>₹{t.balance_after.toFixed(2)}</td>
-                    <td style={{ padding: '14px 18px', color: 'var(--text-muted)' }}>{t.description}</td>
-                    <td style={{ padding: '14px 18px', color: 'var(--text-dim)', fontSize: '0.8rem' }}>{new Date(t.created_at).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 4: Delivery Logs */}
+      {/* Tab 3: Message Delivery Logs */}
       {activeTab === 'logs' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -711,8 +556,8 @@ export const WhatsAppPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {messages.length > 0 ? (
-                    messages.map((m) => (
+                  {pagedMessages.length > 0 ? (
+                    pagedMessages.map((m) => (
                       <tr key={m.id}>
                         <td>
                           <span
@@ -753,11 +598,40 @@ export const WhatsAppPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+
+            {messages.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderTop: '1px solid var(--border-subtle)' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Showing {safeLogPage * LOG_PAGE_SIZE + 1}-{Math.min((safeLogPage + 1) * LOG_PAGE_SIZE, messages.length)} of {messages.length} messages
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    onClick={() => setLogPage(Math.max(0, safeLogPage - 1))}
+                    disabled={safeLogPage === 0}
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                    Page {safeLogPage + 1} of {logTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setLogPage(Math.min(logTotalPages - 1, safeLogPage + 1))}
+                    disabled={safeLogPage >= logTotalPages - 1}
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Tab 5: Dynamic Pricing & Meta Rates */}
+      {/* Tab 4: Dynamic Pricing & Meta Rates */}
       {activeTab === 'pricing' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>

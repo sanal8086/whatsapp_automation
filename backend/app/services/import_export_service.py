@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from app.models.models import Customer, CustomerLoyaltyAccount, LoyaltyTransaction, Campaign, Tenant
+from app.models.models import Customer, CustomerLoyaltyAccount, LoyaltyProgram, LoyaltyTransaction, Campaign, Tenant
 from app.services.customer_service import CustomerService
 from app.services.audit_service import AuditService
 
@@ -72,10 +72,6 @@ class ImportExportService:
         phone_key = mapping.get("phone_col")
         first_name_key = mapping.get("first_name_col")
         last_name_key = mapping.get("last_name_col")
-        email_key = mapping.get("email_col")
-        dob_key = mapping.get("dob_col")
-        spend_key = mapping.get("spend_col")
-        city_key = mapping.get("city_col")
 
         if not phone_key:
             raise HTTPException(status_code=400, detail="Phone number column mapping is required")
@@ -107,30 +103,12 @@ class ImportExportService:
 
             first_name = row.get(first_name_key) if first_name_key else None
             last_name = row.get(last_name_key) if last_name_key else None
-            email = row.get(email_key) if email_key else None
-            dob = row.get(dob_key) if dob_key else None
-            city = row.get(city_key) if city_key else None
-            raw_spend = row.get(spend_key) if spend_key else "0"
-
-            try:
-                spend_val = float(raw_spend) if raw_spend else 0.0
-            except ValueError:
-                spend_val = 0.0
 
             if existing:
                 if first_name and not existing.first_name:
                     existing.first_name = first_name
                 if last_name and not existing.last_name:
                     existing.last_name = last_name
-                if email and not existing.email:
-                    existing.email = email
-                if dob and not existing.date_of_birth:
-                    existing.date_of_birth = dob
-                if city and not existing.city:
-                    existing.city = city
-                if spend_val > 0:
-                    existing.lifetime_spend += spend_val
-                    existing.visits_count += 1
                 updated += 1
             else:
                 cust = Customer(
@@ -139,12 +117,7 @@ class ImportExportService:
                     phone_normalized=clean_phone,
                     first_name=first_name,
                     last_name=last_name,
-                    email=email,
-                    date_of_birth=dob,
-                    city=city,
                     source="EXCEL_IMPORT",
-                    lifetime_spend=spend_val,
-                    visits_count=1 if spend_val > 0 else 0,
                     marketing_consent=True,
                     whatsapp_consent=True
                 )
@@ -152,7 +125,8 @@ class ImportExportService:
                 db.flush()
 
                 # Create loyalty account with welcome bonus
-                init_points = int(spend_val * 0.1) if spend_val > 0 else 100
+                program = db.query(LoyaltyProgram).filter(LoyaltyProgram.tenant_id == tenant_id).first()
+                init_points = program.welcome_bonus_points if program else 100
                 acc = CustomerLoyaltyAccount(
                     tenant_id=tenant_id,
                     customer_id=cust.id,
@@ -192,7 +166,7 @@ class ImportExportService:
         writer = csv.writer(output)
         writer.writerow([
             "ID", "Phone", "First Name", "Last Name", "Email", "Gender",
-            "Date of Birth", "City", "Points Balance", "Tier", "Lifetime Spend",
+            "Date of Birth", "Address", "Points Balance", "Tier", "Lifetime Spend",
             "Visits Count", "WhatsApp Consent", "Created At"
         ])
         for c in customers:
@@ -205,7 +179,7 @@ class ImportExportService:
                 c.email or "",
                 c.gender or "",
                 c.date_of_birth or "",
-                c.city or "",
+                c.address or "",
                 acc.points_balance if acc else 0,
                 acc.current_tier if acc else "BRONZE",
                 f"{c.lifetime_spend:.2f}",

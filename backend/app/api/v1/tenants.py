@@ -110,6 +110,9 @@ def update_tenant_public_page_settings(
     if req.banner_url is not None: page.banner_url = req.banner_url
     if req.primary_color is not None: page.primary_color = req.primary_color
     if req.secondary_color is not None: page.secondary_color = req.secondary_color
+    if req.header_subtitle is not None: page.header_subtitle = req.header_subtitle
+    if req.hero_cta_text is not None: page.hero_cta_text = req.hero_cta_text
+    if req.how_it_works_json is not None: page.how_it_works_json = req.how_it_works_json
     if req.terms_text is not None: page.terms_text = req.terms_text
     if req.contact_phone is not None: page.contact_phone = req.contact_phone
     if req.contact_email is not None: page.contact_email = req.contact_email

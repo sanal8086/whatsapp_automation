@@ -228,6 +228,9 @@ class WhatsAppMessage(Base):
     failed_at = Column(DateTime, nullable=True)
     failure_code = Column(String(50), nullable=True)
     failure_reason = Column(Text, nullable=True)
+    # Award flow: when True, the redeem_points_cta follow-up is sent once this
+    # message is confirmed SENT/DELIVERED by the Meta webhook.
+    redeem_cta_pending = Column(Boolean, default=False)
     created_at = Column(DateTime, default=utc_now)
 
 
@@ -261,7 +264,6 @@ class Customer(Base):
     date_of_birth = Column(String(20), nullable=True)  # YYYY-MM-DD
     anniversary_date = Column(String(20), nullable=True)
     address = Column(String(255), nullable=True)
-    city = Column(String(100), nullable=True)
     country = Column(String(50), default="India")
     source = Column(String(100), default="MANUAL")  # EXCEL, PUBLIC_PAGE, MANUAL, POS
     marketing_consent = Column(Boolean, default=True)
@@ -286,6 +288,7 @@ class Segment(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     rules_json = Column(JSON, nullable=False)  # {"operator": "AND", "conditions": [...]}
+    source = Column(String(20), nullable=False, default="MANUAL")  # MANUAL (owner saved) | AUTO (created by a campaign)
     cached_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -301,11 +304,12 @@ class LoyaltyProgram(Base):
     name = Column(String(255), default="VIP Rewards")
     points_currency_name = Column(String(50), default="Points")
     earn_type = Column(String(50), default="SPEND_BASED")  # SPEND_BASED, VISIT_BASED, FLAT
-    earn_rate = Column(Float, default=1.0)  # e.g. 1 point per 10 INR spent, or 10 points per visit
-    earn_spend_unit = Column(Float, default=10.0)  # spent 10 currency = earn_rate points
+    earn_rate = Column(Float, default=1.0)  # points awarded (per spend unit, or per visit unit)
+    earn_spend_unit = Column(Float, default=10.0)  # spend: ₹10 = earn_rate points | visit: earn_spend_unit visits = earn_rate points
     points_expiry_days = Column(Integer, default=365)
     welcome_bonus_points = Column(Integer, default=100)
     birthday_bonus_points = Column(Integer, default=200)
+    tier_config = Column(JSON, nullable=True)  # {"thresholds": {"SILVER": 500, "GOLD": 1500, "PLATINUM": 3000}, "names": {"BRONZE": "Bronze", ...}}
     status = Column(String(50), default="ACTIVE")
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -337,6 +341,7 @@ class LoyaltyReward(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     image_url = Column(String(500), nullable=True)
+    items = Column(JSON, nullable=True)  # combo: ["Pizza", "Garlic Bread", "Coke"] — single item = 1-element list
     points_required = Column(Integer, nullable=False)
     cash_value = Column(Float, default=0.0)
     terms = Column(Text, nullable=True)
@@ -378,6 +383,7 @@ class Campaign(Base):
     template_id = Column(String(36), ForeignKey("whatsapp_templates.id", ondelete="SET NULL"), nullable=True)
     channel = Column(String(50), default="WHATSAPP")
     status = Column(String(50), default="DRAFT")  # DRAFT, SCHEDULED, SENDING, COMPLETED, CANCELLED, FAILED
+    image_url = Column(String(1000), nullable=True)  # Public link or Meta media id for template image header
     scheduled_at = Column(DateTime, nullable=True)
     variables_mapping_json = Column(JSON, default=dict)
     recipients_count = Column(Integer, default=0)
@@ -445,6 +451,9 @@ class PublicPage(Base):
     banner_url = Column(String(500), nullable=True)
     primary_color = Column(String(20), default="#4F46E5")  # Indigo/Purple vibrant
     secondary_color = Column(String(20), default="#06B6D4")  # Cyan vibrant
+    header_subtitle = Column(String(100), default="VIP Loyalty Club")
+    hero_cta_text = Column(String(255), nullable=True)  # Falls back to "Join Rewards Now & Get {bonus} Pts"
+    how_it_works_json = Column(JSON, nullable=True)  # {"section_title": str, "steps": [{"title": str, "description": str} x3]}
     terms_text = Column(Text, default="Points cannot be exchanged for cash. Standard terms apply.")
     contact_phone = Column(String(50), nullable=True)
     contact_email = Column(String(255), nullable=True)

@@ -3,41 +3,37 @@ import { Link } from 'react-router-dom';
 import {
   ShieldCheck,
   Building,
-  CreditCard,
   Wallet,
   Users,
-  CheckCircle2,
-  AlertTriangle,
-  PlusCircle,
-  FileText,
   X,
   ArrowLeft,
-  Calendar,
   History,
   Tag,
   Search,
   Filter,
   RefreshCw,
-  MinusCircle,
-  ExternalLink,
-  ChevronDown,
   Clock,
-  UserCheck,
-  UserX,
   Mail,
-  Phone
+  Phone,
+  Palette,
+  ExternalLink,
+  Sparkles,
+  Gift
 } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { AuditLog, MessagePricing } from '../../types';
+import { alertError, alertSuccess, confirmAction } from '../../utils/alert';
+import { TablePagination } from '../../components/ui';
+
+const PAGE_SIZE = 10;
 
 export const AdminPage: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'businesses' | 'users' | 'audit' | 'pricing' | 'templates'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'users' | 'audit' | 'pricing' | 'designer'>('businesses');
   const [overview, setOverview] = useState<any>(null);
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
-  const [globalTemplates, setGlobalTemplates] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [pricingRates, setPricingRates] = useState<MessagePricing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,35 +47,30 @@ export const AdminPage: React.FC = () => {
   const [auditSearchQuery, setAuditSearchQuery] = useState<string>('');
   const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null);
 
-  // Mark Paid Modal
-  const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
-  const [selectedTenantId, setSelectedTenantId] = useState('');
-  const [selectedTenantName, setSelectedTenantName] = useState('');
-  const [paidAmount, setPaidAmount] = useState('2499');
-  const [paidMonths, setPaidMonths] = useState('1');
-  const [paidNotes, setPaidNotes] = useState('NEFT Bank Transfer received');
+  // Pagination
+  const [bizPage, setBizPage] = useState(1);
+  const [userPage, setUserPage] = useState(1);
+  const [auditPage, setAuditPage] = useState(1);
 
-  // Wallet Adjustment Modal (Credit or Debit)
-  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
-  const [adjustmentType, setAdjustmentType] = useState<'CREDIT' | 'DEBIT'>('CREDIT');
-  const [adjustmentAmount, setAdjustmentAmount] = useState('500');
-  const [adjustmentReason, setAdjustmentReason] = useState('Promotional messaging incentive');
+  // Live Page Designer
+  const [designBizId, setDesignBizId] = useState<string>('');
+  const [designPage, setDesignPage] = useState<any>(null);
+  const [designForm, setDesignForm] = useState<any>(null);
+  const [designSaving, setDesignSaving] = useState(false);
 
   const fetchAdminData = async () => {
     try {
       setLoading(true);
-      const [overData, bizData, userData, tplData, auditData, pricingData] = await Promise.all([
+      const [overData, bizData, userData, auditData, pricingData] = await Promise.all([
         apiRequest('/admin/overview').catch(() => null),
         apiRequest('/admin/businesses').catch(() => []),
         apiRequest('/admin/users').catch(() => []),
-        apiRequest('/admin/global-templates').catch(() => []),
         apiRequest('/admin/audit-logs?limit=100').catch(() => []),
-        apiRequest('/whatsapp/pricing/rates').catch(() => []),
+        apiRequest('/whatsapp/pricing').catch(() => []),
       ]);
       setOverview(overData);
       setBusinesses(bizData);
       setUsers(userData);
-      setGlobalTemplates(tplData);
       setAuditLogs(auditData);
       setPricingRates(pricingData);
     } catch (err) {
@@ -98,7 +89,7 @@ export const AdminPage: React.FC = () => {
       await apiRequest(`/admin/businesses/${tenantId}/toggle-status`, { method: 'POST' });
       fetchAdminData();
     } catch (err: any) {
-      alert(err.message || 'Status change failed');
+      alertError(err.message || 'Status change failed');
     }
   };
 
@@ -107,81 +98,91 @@ export const AdminPage: React.FC = () => {
       await apiRequest(`/admin/businesses/${tenantId}/approve`, { method: 'POST' });
       fetchAdminData();
     } catch (err: any) {
-      alert(err.message || 'Approval failed');
+      alertError(err.message || 'Approval failed');
     }
   };
 
   const handleReject = async (tenantId: string) => {
-    if (!confirm('Are you sure you want to reject this business application?')) return;
+    const ok = await confirmAction('Reject this business application?', 'The merchant will not be able to proceed.', 'Yes, reject');
+    if (!ok) return;
     try {
       await apiRequest(`/admin/businesses/${tenantId}/reject`, { method: 'POST' });
       fetchAdminData();
     } catch (err: any) {
-      alert(err.message || 'Rejection failed');
+      alertError(err.message || 'Rejection failed');
     }
   };
 
-  const handleExtendSubscription = async (tenantId: string, days: number = 30) => {
-    if (!confirm(`Extend subscription for ${days} days?`)) return;
+  // Live Page Designer
+  const fetchDesignPage = async (tenantId: string) => {
     try {
-      await apiRequest(`/admin/subscriptions/${tenantId}/extend?days=${days}`, { method: 'POST' });
-      alert(`Subscription extended by ${days} days!`);
-      fetchAdminData();
+      const data = await apiRequest(`/admin/businesses/${tenantId}/public-page`);
+      setDesignPage(data);
+      setDesignForm({
+        hero_title: data.hero_title || '',
+        hero_description: data.hero_description || '',
+        primary_color: data.primary_color || '#4F46E5',
+        secondary_color: data.secondary_color || '#06B6D4',
+        logo_url: data.logo_url || '',
+        header_subtitle: data.header_subtitle || '',
+        hero_cta_text: data.hero_cta_text || '',
+        how_it_works: data.how_it_works_json?.steps?.length
+          ? data.how_it_works_json.steps.map((s: any) => ({ title: s.title || '', description: s.description || '' }))
+          : [
+              { title: 'Join in 10 Seconds', description: 'Enter your mobile number and instantly receive your welcome bonus points.' },
+              { title: 'Earn on Every Visit', description: 'Share your phone number at billing. Points get added automatically with WhatsApp receipts.' },
+              { title: 'Unlock Free Perks', description: 'Redeem your points for delicious food items, discounts & VIP member experiences.' }
+            ],
+        how_it_works_title: data.how_it_works_json?.section_title || 'How It Works',
+        terms_text: data.terms_text || '',
+      });
     } catch (err: any) {
-      alert(err.message || 'Failed to extend subscription');
+      alertError(err.message || 'Failed to load page design');
     }
   };
 
-  const handleCancelSubscription = async (tenantId: string) => {
-    if (!confirm('Are you sure you want to CANCEL this subscription?')) return;
+  const handleSaveDesign = async () => {
+    if (!designBizId || !designForm) return;
+    setDesignSaving(true);
     try {
-      await apiRequest(`/admin/subscriptions/${tenantId}/cancel`, { method: 'POST' });
-      alert('Subscription marked as CANCELLED');
-      fetchAdminData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to cancel subscription');
-    }
-  };
-
-  const handleMarkPaid = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await apiRequest('/admin/subscriptions/mark-paid', {
-        method: 'POST',
+      const data = await apiRequest(`/admin/businesses/${designBizId}/public-page`, {
+        method: 'PATCH',
         body: JSON.stringify({
-          tenant_id: selectedTenantId,
-          amount: parseFloat(paidAmount),
-          months: parseInt(paidMonths) || 1,
-          notes: paidNotes,
+          hero_title: designForm.hero_title,
+          hero_description: designForm.hero_description,
+          primary_color: designForm.primary_color,
+          secondary_color: designForm.secondary_color,
+          logo_url: designForm.logo_url || null,
+          header_subtitle: designForm.header_subtitle || null,
+          hero_cta_text: designForm.hero_cta_text || null,
+          how_it_works_json: {
+            section_title: designForm.how_it_works_title,
+            steps: (designForm.how_it_works || []).filter((s: any) => s.title || s.description),
+          },
+          terms_text: designForm.terms_text || null,
         }),
       });
-      setShowMarkPaidModal(false);
-      alert('Subscription marked PAID and extended!');
-      fetchAdminData();
+      setDesignPage(data);
+      alertSuccess('Live page design saved — customers will see the update immediately.');
     } catch (err: any) {
-      alert(err.message || 'Failed to update subscription');
+      alertError(err.message || 'Failed to save design');
+    } finally {
+      setDesignSaving(false);
     }
   };
 
-  const handleAdjustWallet = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await apiRequest('/admin/wallets/adjustment', {
-        method: 'POST',
-        body: JSON.stringify({
-          tenant_id: selectedTenantId,
-          amount: parseFloat(adjustmentAmount),
-          type: adjustmentType,
-          description: adjustmentReason,
-        }),
-      });
-      setShowAdjustmentModal(false);
-      alert(`Wallet successfully ${adjustmentType === 'CREDIT' ? 'credited' : 'debited'}!`);
-      fetchAdminData();
-    } catch (err: any) {
-      alert(err.message || 'Adjustment failed');
+  useEffect(() => {
+    if (activeTab === 'designer' && !designBizId && businesses.length > 0) {
+      setDesignBizId(businesses[0].id);
     }
-  };
+  }, [activeTab, designBizId, businesses]);
+
+  useEffect(() => {
+    if (designBizId) {
+      setDesignPage(null);
+      fetchDesignPage(designBizId);
+    }
+  }, [designBizId]);
 
   // Filtered audit logs
   const filteredAuditLogs = auditLogs.filter((log) => {
@@ -194,8 +195,39 @@ export const AdminPage: React.FC = () => {
     return matchesAction && matchesQuery;
   });
 
+  const filteredUsers = users.filter((u) => {
+    const query = userSearchQuery.toLowerCase();
+    const matchesSearch =
+      (u.name || '').toLowerCase().includes(query) ||
+      (u.email || '').toLowerCase().includes(query) ||
+      (u.phone || '').toLowerCase().includes(query) ||
+      (u.tenant_name || '').toLowerCase().includes(query);
+
+    const matchesStatus =
+      userFilterStatus === 'ALL' || u.tenant_status === userFilterStatus;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Pagination slices (reset to page 1 when filters change)
+  useEffect(() => { setUserPage(1); }, [userSearchQuery, userFilterStatus]);
+  useEffect(() => { setAuditPage(1); }, [auditSearchQuery, auditFilterAction]);
+
+  const bizTotalPages = Math.max(1, Math.ceil(businesses.length / PAGE_SIZE));
+  const bizSafePage = Math.min(bizPage, bizTotalPages);
+  const pagedBusinesses = businesses.slice((bizSafePage - 1) * PAGE_SIZE, bizSafePage * PAGE_SIZE);
+
+  const userTotalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const userSafePage = Math.min(userPage, userTotalPages);
+  const pagedUsers = filteredUsers.slice((userSafePage - 1) * PAGE_SIZE, userSafePage * PAGE_SIZE);
+
+  const auditTotalPages = Math.max(1, Math.ceil(filteredAuditLogs.length / PAGE_SIZE));
+  const auditSafePage = Math.min(auditPage, auditTotalPages);
+  const pagedAuditLogs = filteredAuditLogs.slice((auditSafePage - 1) * PAGE_SIZE, auditSafePage * PAGE_SIZE);
+
+
   return (
-    <div style={{ padding: '36px', minHeight: '100vh', backgroundColor: 'var(--bg-body)' }}>
+    <div className="admin-dark" style={{ padding: '36px', minHeight: '100vh', backgroundColor: 'var(--bg-body)' }}>
       {/* Top Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -362,11 +394,11 @@ export const AdminPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('templates')}
-          className={`subnav-tab ${activeTab === 'templates' ? 'active' : ''}`}
+          onClick={() => setActiveTab('designer')}
+          className={`subnav-tab ${activeTab === 'designer' ? 'active' : ''}`}
         >
-          <FileText size={16} />
-          Global Template Library ({globalTemplates.length})
+          <Palette size={16} />
+          Live Page Designer
         </button>
       </div>
 
@@ -379,14 +411,13 @@ export const AdminPage: React.FC = () => {
                 <tr>
                   <th>Business</th>
                   <th>WhatsApp Status</th>
-                  <th>Subscription Lifecycle</th>
-                  <th>Wallet Balance</th>
-                  <th>Account Status</th>
+                  <th>Subscription Status</th>
+                  <th>Expires</th>
                   <th style={{ textAlign: 'right' }}>Admin Operations</th>
                 </tr>
               </thead>
               <tbody>
-                {businesses.map((biz) => {
+                {pagedBusinesses.map((biz) => {
                   const initial = (biz.name || 'B').charAt(0).toUpperCase();
                   return (
                     <tr key={biz.id}>
@@ -412,81 +443,23 @@ export const AdminPage: React.FC = () => {
                       </td>
 
                       <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <span className={`badge ${biz.subscription_status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`} style={{ borderRadius: '9999px', padding: '3px 10px', fontSize: '11px' }}>
-                              {biz.subscription_status}
-                            </span>
-                            <span className={`badge ${biz.subscription_payment === 'MANUAL_VERIFIED' ? 'badge-info' : 'badge-neutral'}`} style={{ borderRadius: '9999px', padding: '3px 10px', fontSize: '11px' }}>
-                              {biz.subscription_payment}
-                            </span>
-                          </div>
-                          {biz.subscription_ends_at && (
-                            <span style={{ fontSize: '11.5px', color: 'var(--text-dim)' }}>
-                              Expires: {new Date(biz.subscription_ends_at).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>
-                        ₹{biz.wallet_balance.toFixed(2)}
-                      </td>
-
-                      <td>
-                        <span className={`badge ${biz.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`} style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}>
-                          {biz.status}
+                        <span className={`badge ${biz.subscription_status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`} style={{ borderRadius: '9999px', padding: '3px 10px', fontSize: '11px' }}>
+                          {biz.subscription_status}
                         </span>
+                      </td>
+
+                      <td style={{ fontSize: '12px', color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums' }}>
+                        {biz.subscription_ends_at ? new Date(biz.subscription_ends_at).toLocaleDateString() : '—'}
                       </td>
 
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => {
-                              setSelectedTenantId(biz.id);
-                              setSelectedTenantName(biz.name);
-                              setShowAdjustmentModal(true);
-                            }}
-                            className="btn-table-action"
-                            title="Credit or Debit wallet balance with audit note"
-                          >
-                            Adjust Wallet
-                          </button>
-
-                          <button
-                            onClick={() => handleExtendSubscription(biz.id, 30)}
-                            className="btn-table-action"
-                            title="Extend subscription by 30 days"
-                          >
-                            +30d Sub
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setSelectedTenantId(biz.id);
-                              setSelectedTenantName(biz.name);
-                              setShowMarkPaidModal(true);
-                            }}
-                            className="btn-table-action"
-                          >
-                            Mark Paid
-                          </button>
-
                           <button
                             onClick={() => handleToggleStatus(biz.id)}
                             className="btn-table-action"
                             style={{ color: biz.status === 'ACTIVE' ? 'var(--danger)' : 'var(--success)' }}
                           >
                             {biz.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-                          </button>
-
-                          <button
-                            onClick={() => handleCancelSubscription(biz.id)}
-                            className="btn-table-action"
-                            style={{ color: 'var(--text-dim)' }}
-                            title="Cancel active subscription"
-                          >
-                            Cancel Sub
                           </button>
                         </div>
                       </td>
@@ -496,6 +469,12 @@ export const AdminPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            page={bizSafePage}
+            totalPages={bizTotalPages}
+            totalItems={businesses.length}
+            onPageChange={setBizPage}
+          />
         </div>
       )}
 
@@ -528,6 +507,7 @@ export const AdminPage: React.FC = () => {
                 <option value="PENDING_APPROVAL">Pending Approval ({businesses.filter(b => b.status === 'PENDING_APPROVAL').length})</option>
                 <option value="APPROVED">Approved</option>
                 <option value="ACTIVE">Active</option>
+                <option value="SUSPENDED">Suspended</option>
                 <option value="REJECTED">Rejected</option>
               </select>
             </div>
@@ -546,46 +526,14 @@ export const AdminPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {users.filter(u => {
-                  const query = userSearchQuery.toLowerCase();
-                  const matchesSearch =
-                    (u.name || '').toLowerCase().includes(query) ||
-                    (u.email || '').toLowerCase().includes(query) ||
-                    (u.phone || '').toLowerCase().includes(query) ||
-                    (u.tenant_name || '').toLowerCase().includes(query);
-
-                  const matchesStatus =
-                    userFilterStatus === 'ALL' ||
-                    (userFilterStatus === 'PENDING_APPROVAL' && u.tenant_status === 'PENDING_APPROVAL') ||
-                    (userFilterStatus === 'APPROVED' && u.tenant_status === 'APPROVED') ||
-                    (userFilterStatus === 'ACTIVE' && u.tenant_status === 'ACTIVE') ||
-                    (userFilterStatus === 'REJECTED' && u.tenant_status === 'REJECTED');
-
-                  return matchesSearch && matchesStatus;
-                }).length === 0 ? (
+                {filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-dim)' }}>
                       No registered users found matching the search criteria.
                     </td>
                   </tr>
                 ) : (
-                  users.filter(u => {
-                    const query = userSearchQuery.toLowerCase();
-                    const matchesSearch =
-                      (u.name || '').toLowerCase().includes(query) ||
-                      (u.email || '').toLowerCase().includes(query) ||
-                      (u.phone || '').toLowerCase().includes(query) ||
-                      (u.tenant_name || '').toLowerCase().includes(query);
-
-                    const matchesStatus =
-                      userFilterStatus === 'ALL' ||
-                      (userFilterStatus === 'PENDING_APPROVAL' && u.tenant_status === 'PENDING_APPROVAL') ||
-                      (userFilterStatus === 'APPROVED' && u.tenant_status === 'APPROVED') ||
-                      (userFilterStatus === 'ACTIVE' && u.tenant_status === 'ACTIVE') ||
-                      (userFilterStatus === 'REJECTED' && u.tenant_status === 'REJECTED');
-
-                    return matchesSearch && matchesStatus;
-                  }).map((u) => {
+                  pagedUsers.map((u) => {
                     const isPending = u.tenant_status === 'PENDING_APPROVAL';
                     return (
                       <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -634,10 +582,12 @@ export const AdminPage: React.FC = () => {
                             u.tenant_status === 'APPROVED' ? 'badge-info' :
                             u.tenant_status === 'PENDING_APPROVAL' ? 'badge-warning' :
                             u.tenant_status === 'REJECTED' ? 'badge-danger' :
+                            u.tenant_status === 'SUSPENDED' ? 'badge-danger' :
                             'badge-neutral'
                           }`}>
                             {u.tenant_status === 'PENDING_APPROVAL' ? '⏳ PENDING APPROVAL' :
                              u.tenant_status === 'APPROVED' ? '✓ APPROVED' :
+                             u.tenant_status === 'SUSPENDED' ? '⛔ SUSPENDED' :
                              u.tenant_status || u.user_status}
                           </span>
                         </td>
@@ -690,6 +640,10 @@ export const AdminPage: React.FC = () => {
                             <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600 }}>
                               Active Merchant
                             </span>
+                          ) : u.tenant_status === 'SUSPENDED' ? (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600 }}>
+                              Suspended — manage in Businesses Directory
+                            </span>
                           ) : (
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
                               —
@@ -703,6 +657,12 @@ export const AdminPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            page={userSafePage}
+            totalPages={userTotalPages}
+            totalItems={filteredUsers.length}
+            onPageChange={setUserPage}
+          />
         </div>
       )}
 
@@ -732,12 +692,13 @@ export const AdminPage: React.FC = () => {
                 onChange={(e) => setAuditFilterAction(e.target.value)}
               >
                 <option value="ALL">All Actions</option>
-                <option value="CAMPAIGN_EXECUTED">CAMPAIGN_EXECUTED</option>
-                <option value="WALLET_ADJUSTED">WALLET_ADJUSTED</option>
-                <option value="SUBSCRIPTION_EXTENDED">SUBSCRIPTION_EXTENDED</option>
-                <option value="SUBSCRIPTION_CANCELLED">SUBSCRIPTION_CANCELLED</option>
-                <option value="CONSENT_UPDATED">CONSENT_UPDATED</option>
-                <option value="CUSTOMER_IMPORTED">CUSTOMER_IMPORTED</option>
+                <option value="BUSINESS_APPROVED">Business Approved</option>
+                <option value="BUSINESS_REJECTED">Business Rejected</option>
+                <option value="WHATSAPP_CONNECTED">WhatsApp Connected</option>
+                <option value="WHATSAPP_DISCONNECTED">WhatsApp Disconnected</option>
+                <option value="CAMPAIGN_EXECUTED">Campaign Executed</option>
+                <option value="CAMPAIGN_CREATED">Campaign Created</option>
+                <option value="CUSTOMERS_IMPORTED">Customers Imported</option>
               </select>
             </div>
           </div>
@@ -756,7 +717,7 @@ export const AdminPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAuditLogs.map((log) => (
+                  {pagedAuditLogs.map((log) => (
                     <tr key={log.id}>
                       <td style={{ color: 'var(--text-dim)', whiteSpace: 'nowrap', fontSize: '12px' }}>
                         {new Date(log.created_at).toLocaleString()}
@@ -765,8 +726,9 @@ export const AdminPage: React.FC = () => {
                       <td>
                         <span
                           className={`badge ${
-                            log.action.includes('WALLET') ? 'badge-warning' :
-                            log.action.includes('CANCEL') ? 'badge-danger' :
+                            log.action.includes('REJECT') || log.action.includes('CANCEL') ? 'badge-danger' :
+                            log.action.includes('DISCONNECT') ? 'badge-warning' :
+                            log.action.includes('APPROVE') || log.action.includes('CONNECT') ? 'badge-success' :
                             log.action.includes('CAMPAIGN') ? 'badge-info' : 'badge-whatsapp'
                           }`}
                           style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}
@@ -810,6 +772,12 @@ export const AdminPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+            <TablePagination
+              page={auditSafePage}
+              totalPages={auditTotalPages}
+              totalItems={filteredAuditLogs.length}
+              onPageChange={setAuditPage}
+            />
           </div>
         </div>
       )}
@@ -883,150 +851,318 @@ export const AdminPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: GLOBAL TEMPLATES */}
-      {activeTab === 'templates' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-          {globalTemplates.map((gt) => (
-            <div key={gt.id} className="card card-interactive" style={{ padding: '22px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span className="badge badge-info" style={{ borderRadius: '9999px', padding: '4px 12px', fontSize: '11px' }}>{gt.category}</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{gt.key}</span>
-              </div>
-              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '10px' }}>{gt.name}</h4>
-              <div style={{ backgroundColor: 'var(--bg-surface)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-subtle)', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                {gt.body_text}
-              </div>
+      {/* TAB 4: LIVE PAGE DESIGNER */}
+      {activeTab === 'designer' && (
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* Editor Panel */}
+          <div className="glass-card" style={{ padding: '24px', flex: 1, minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>
+                Loyalty & Rewards Page Designer
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Design the live preview page your business owner's customers see. Shows their program & created rewards.
+              </span>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* MODAL: MARK SUBSCRIPTION PAID */}
-      {showMarkPaidModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="modal-content" style={{ maxWidth: '420px', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Mark Subscription Payment</h3>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Tenant: {selectedTenantName}</span>
-              </div>
-              <button onClick={() => setShowMarkPaidModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleMarkPaid}>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Amount Received (INR)</label>
-                <input type="number" className="form-input" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} required />
-              </div>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Months Extension</label>
-                <input type="number" className="form-input" value={paidMonths} onChange={(e) => setPaidMonths(e.target.value)} required />
-              </div>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Payment Reference / Notes</label>
-                <input type="text" className="form-input" value={paidNotes} onChange={(e) => setPaidNotes(e.target.value)} required />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setShowMarkPaidModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Verify & Activate</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: WALLET ADJUSTMENT (CREDIT OR DEBIT) */}
-      {showAdjustmentModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="modal-content" style={{ maxWidth: '440px', padding: '26px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Adjust Messaging Wallet</h3>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Tenant: {selectedTenantName}</span>
-              </div>
-              <button onClick={() => setShowAdjustmentModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleAdjustWallet}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Adjustment Action</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setAdjustmentType('CREDIT')}
-                    style={{
-                      padding: '10px',
-                      borderRadius: '8px',
-                      border: adjustmentType === 'CREDIT' ? '2px solid var(--success)' : '1px solid var(--border-subtle)',
-                      backgroundColor: adjustmentType === 'CREDIT' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                      color: adjustmentType === 'CREDIT' ? 'var(--success)' : 'var(--text-muted)',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
-                    }}
+            {businesses.length === 0 ? (
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No businesses available yet.</span>
+            ) : (
+              <>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Business</label>
+                  <select
+                    className="form-input"
+                    value={designBizId}
+                    onChange={(e) => setDesignBizId(e.target.value)}
                   >
-                    <PlusCircle size={16} />
-                    Credit (+)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setAdjustmentType('DEBIT')}
-                    style={{
-                      padding: '10px',
-                      borderRadius: '8px',
-                      border: adjustmentType === 'DEBIT' ? '2px solid var(--danger)' : '1px solid var(--border-subtle)',
-                      backgroundColor: adjustmentType === 'DEBIT' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                      color: adjustmentType === 'DEBIT' ? 'var(--danger)' : 'var(--text-muted)',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <MinusCircle size={16} />
-                    Debit (-)
-                  </button>
+                    {businesses.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name} ({b.status})</option>
+                    ))}
+                  </select>
                 </div>
-              </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Amount (INR)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="1"
-                  className="form-input"
-                  value={adjustmentAmount}
-                  onChange={(e) => setAdjustmentAmount(e.target.value)}
-                  required
-                />
-              </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Hero Title</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={designForm?.hero_title || ''}
+                    onChange={(e) => setDesignForm({ ...designForm, hero_title: e.target.value })}
+                    placeholder="Welcome to VIP Rewards"
+                  />
+                </div>
 
-              <div style={{ marginBottom: '22px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  Audited Reason / Description <span style={{ color: 'var(--danger)' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Compensation for failed delivery batch / Refund"
-                  value={adjustmentReason}
-                  onChange={(e) => setAdjustmentReason(e.target.value)}
-                  required
-                />
-              </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Hero Description</label>
+                  <textarea
+                    className="form-input"
+                    rows={3}
+                    value={designForm?.hero_description || ''}
+                    onChange={(e) => setDesignForm({ ...designForm, hero_description: e.target.value })}
+                    placeholder="Earn points on every visit and unlock exclusive rewards!"
+                  />
+                </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setShowAdjustmentModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">
-                  {adjustmentType === 'CREDIT' ? 'Confirm Credit' : 'Confirm Debit'}
-                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Primary Color</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        type="color"
+                        value={designForm?.primary_color || '#4F46E5'}
+                        onChange={(e) => setDesignForm({ ...designForm, primary_color: e.target.value })}
+                        style={{ width: '42px', height: '38px', padding: '2px', borderRadius: '8px', border: '1px solid var(--border-default)', cursor: 'pointer', background: 'none' }}
+                      />
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={designForm?.primary_color || ''}
+                        onChange={(e) => setDesignForm({ ...designForm, primary_color: e.target.value })}
+                        style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Secondary Color</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        type="color"
+                        value={designForm?.secondary_color || '#06B6D4'}
+                        onChange={(e) => setDesignForm({ ...designForm, secondary_color: e.target.value })}
+                        style={{ width: '42px', height: '38px', padding: '2px', borderRadius: '8px', border: '1px solid var(--border-default)', cursor: 'pointer', background: 'none' }}
+                      />
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={designForm?.secondary_color || ''}
+                        onChange={(e) => setDesignForm({ ...designForm, secondary_color: e.target.value })}
+                        style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Logo URL</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={designForm?.logo_url || ''}
+                    onChange={(e) => setDesignForm({ ...designForm, logo_url: e.target.value })}
+                    placeholder="https://... (optional)"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Header Subtitle (under business name)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={designForm?.header_subtitle || ''}
+                    onChange={(e) => setDesignForm({ ...designForm, header_subtitle: e.target.value })}
+                    placeholder="VIP Loyalty Club"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Hero CTA Text (leave blank for auto: "Join Rewards Now & Get X Pts")</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={designForm?.hero_cta_text || ''}
+                    onChange={(e) => setDesignForm({ ...designForm, hero_cta_text: e.target.value })}
+                    placeholder="Join Rewards Now & Get 100 Pts"
+                  />
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>How It Works — Section Title</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={designForm?.how_it_works_title || ''}
+                    onChange={(e) => setDesignForm({ ...designForm, how_it_works_title: e.target.value })}
+                    placeholder="How It Works"
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+                    {(designForm?.how_it_works || []).map((step: any, idx: number) => (
+                      <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-bg)', color: 'var(--primary-hover)', fontWeight: 700, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {idx + 1}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={step.title}
+                            onChange={(e) => {
+                              const steps = [...designForm.how_it_works];
+                              steps[idx] = { ...steps[idx], title: e.target.value };
+                              setDesignForm({ ...designForm, how_it_works: steps });
+                            }}
+                            placeholder={`Step ${idx + 1} title`}
+                            style={{ marginBottom: '6px' }}
+                          />
+                          <textarea
+                            className="form-input"
+                            rows={2}
+                            value={step.description}
+                            onChange={(e) => {
+                              const steps = [...designForm.how_it_works];
+                              steps[idx] = { ...steps[idx], description: e.target.value };
+                              setDesignForm({ ...designForm, how_it_works: steps });
+                            }}
+                            placeholder={`Step ${idx + 1} description`}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Terms Text</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={designForm?.terms_text || ''}
+                    onChange={(e) => setDesignForm({ ...designForm, terms_text: e.target.value })}
+                    placeholder="Points cannot be exchanged for cash..."
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handleSaveDesign}
+                    disabled={designSaving}
+                    className="btn"
+                    style={{ background: 'var(--emerald-gradient)', color: '#fff', fontWeight: 700, opacity: designSaving ? 0.6 : 1 }}
+                  >
+                    {designSaving ? 'Saving...' : 'Save Design'}
+                  </button>
+                  {designPage?.slug && (
+                    <a
+                      href={`/l/${designPage.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-secondary"
+                    >
+                      <ExternalLink size={14} /> Open Live Page
+                    </a>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Live Preview Panel */}
+          <div className="glass-panel" style={{ padding: '24px', flex: 1.2, minWidth: '340px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Customer Preview</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Edits reflect instantly below</span>
+            </div>
+
+            {!designPage || !designForm ? (
+              <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+                Loading preview…
               </div>
-            </form>
+            ) : (() => {
+              const primary = designForm.primary_color || '#059669';
+              const secondary = designForm.secondary_color || '#D97706';
+              const program = designPage.program || {};
+              const rewards = designPage.rewards || [];
+              return (
+                <div style={{ background: '#0B0F19', color: '#F9FAFB', borderRadius: '18px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  {/* Brand header */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {designForm.logo_url ? (
+                        <img src={designForm.logo_url} alt="logo" style={{ width: '34px', height: '34px', borderRadius: '10px', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 15px ${primary}66` }}>
+                          <Sparkles size={16} color="#fff" />
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{designPage.business_name}</div>
+                        <div style={{ fontSize: '0.68rem', color: '#9CA3AF' }}>{designForm.header_subtitle || 'VIP Loyalty Club'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Hero */}
+                  <div style={{ padding: '28px 18px', backgroundImage: `radial-gradient(circle at 50% 20%, ${primary}33 0%, rgba(17, 24, 39, 0.6) 80%)` }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(31, 41, 55, 0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '9999px', padding: '5px 12px', fontSize: '0.7rem', fontWeight: 600, marginBottom: '12px' }}>
+                      <Gift size={12} color={secondary} />
+                      {program.welcome_bonus_points ?? 100} {program.points_currency_name || 'Points'} Welcome Bonus
+                    </div>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0 0 8px' }}>{designForm.hero_title || 'Welcome to VIP Rewards'}</h2>
+                    <p style={{ fontSize: '0.82rem', color: '#9CA3AF', margin: '0 0 14px', lineHeight: 1.5 }}>
+                      {designForm.hero_description || 'Earn points on every visit and unlock exclusive rewards!'}
+                    </p>
+                    {designForm.hero_cta_text && (
+                      <div style={{ display: 'inline-block', background: primary, color: '#fff', fontWeight: 700, fontSize: '0.8rem', padding: '9px 20px', borderRadius: '9999px' }}>
+                        {designForm.hero_cta_text}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* How It Works */}
+                  <div style={{ padding: '0 18px 18px' }}>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '10px' }}>{designForm.how_it_works_title || 'How It Works'}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                      {(designForm.how_it_works || []).map((step: any, idx: number) => (
+                        <div key={idx} style={{ background: 'rgba(31, 41, 55, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ width: '24px', height: '24px', borderRadius: '7px', backgroundColor: primary, color: '#fff', fontWeight: 800, fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                            {idx + 1}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: '3px' }}>{step.title}</div>
+                          <div style={{ fontSize: '0.62rem', color: '#9CA3AF', lineHeight: 1.4 }}>{step.description}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Rewards grid — the rewards created for this business */}
+                  <div style={{ padding: '18px' }}>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '12px' }}>Featured Member Rewards</div>
+                    {rewards.length === 0 ? (
+                      <div style={{ padding: '24px', textAlign: 'center', color: '#6B7280', fontSize: '0.8rem', border: '1px dashed rgba(255,255,255,0.12)', borderRadius: '12px' }}>
+                        No rewards created yet for this business.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>
+                        {rewards.map((r: any) => (
+                          <div key={r.id} style={{ background: 'rgba(31, 41, 55, 0.8)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', overflow: 'hidden' }}>
+                            <div style={{ height: '70px', background: `${primary}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {r.image_url ? (
+                                <img src={r.image_url} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <Gift size={22} color={primary} />
+                              )}
+                            </div>
+                            <div style={{ padding: '10px' }}>
+                              <div style={{ fontSize: '0.78rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                              {r.description && (
+                                <div style={{ fontSize: '0.68rem', color: '#9CA3AF', marginTop: '2px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                  {r.description}
+                                </div>
+                              )}
+                              <div style={{ marginTop: '6px' }}>
+                                <span style={{ background: secondary, color: '#fff', fontSize: '0.64rem', fontWeight: 800, padding: '3px 9px', borderRadius: '9999px' }}>
+                                  {r.points_required} {program.points_currency_name || 'Points'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

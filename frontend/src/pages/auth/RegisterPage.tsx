@@ -83,17 +83,6 @@ export const RegisterPage: React.FC = () => {
           >
             Start Your Loyalty Program
           </h1>
-          <p
-            style={{
-              color: 'var(--text-muted)',
-              fontSize: '13.5px',
-              lineHeight: 1.45,
-              marginTop: '8px',
-              fontWeight: 400,
-            }}
-          >
-            Instant setup with 14-day free trial & ₹250 free WhatsApp credits
-          </p>
         </div>
 
         <div
@@ -225,7 +214,7 @@ export const RegisterPage: React.FC = () => {
                 gap: '8px',
               }}
             >
-              {loading ? 'Creating Account...' : 'Get Started Free'}
+              {loading ? 'Submitting...' : 'Submit'}
               <ArrowRight size={16} />
             </button>
           </form>

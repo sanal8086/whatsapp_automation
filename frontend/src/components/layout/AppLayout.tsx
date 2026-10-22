@@ -1,40 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
   Award,
   Send,
-  Zap,
   MessageSquare,
-  Sparkles,
+  Megaphone,
   Settings,
   ShieldCheck,
   LogOut,
-  Wallet,
   ExternalLink,
-  PlusCircle,
   Menu,
-  X,
   MapPin,
   Hexagon,
   PanelLeftClose,
   PanelLeftOpen,
+  PlusCircle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { apiRequest } from '../../api/client';
-import { Wallet as WalletType, WhatsAppConnection } from '../../types';
 
 export const AppLayout: React.FC = () => {
   const { user, tenant, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [wallet, setWallet] = useState<WalletType | null>(null);
-  const [waConnection, setWaConnection] = useState<WhatsAppConnection | null>(null);
-  const [showTopupModal, setShowTopupModal] = useState(false);
-  const [topupAmount, setTopupAmount] = useState('500');
-  const [topupLoading, setTopupLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState<boolean>(() => {
     return localStorage.getItem('goagain_sidebar_expanded') === 'true';
@@ -48,50 +38,14 @@ export const AppLayout: React.FC = () => {
     });
   };
 
-  const fetchStatus = async () => {
-    try {
-      const [walletData, waData] = await Promise.all([
-        apiRequest<WalletType>('/wallet'),
-        apiRequest<WhatsAppConnection>('/whatsapp/connection'),
-      ]);
-      setWallet(walletData);
-      setWaConnection(waData);
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
-  }, [tenant]);
-
-  const handleTopup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setTopupLoading(true);
-    try {
-      const updated = await apiRequest<WalletType>('/wallet/topup-demo', {
-        method: 'POST',
-        body: JSON.stringify({ amount: parseFloat(topupAmount) }),
-      });
-      setWallet(updated);
-      setShowTopupModal(false);
-    } catch (err) {
-      alert('Topup error');
-    } finally {
-      setTopupLoading(false);
-    }
-  };
-
   const navItems = [
-    { label: 'Dashboard', path: '/app', icon: LayoutDashboard },
+    { label: 'Award Points', path: '/app', icon: PlusCircle },
+    { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard },
     { label: 'Customers', path: '/app/customers', icon: Users },
     { label: 'Loyalty & Rewards', path: '/app/loyalty', icon: Award },
     { label: 'Campaigns', path: '/app/campaigns', icon: Send },
-    { label: 'Automations', path: '/app/automations', icon: Zap },
-    { label: 'WhatsApp & Wallet', path: '/app/whatsapp', icon: MessageSquare },
-    { label: 'Smart Insights', path: '/app/insights', icon: Sparkles },
+    { label: 'New Offer Run', path: '/app/offers', icon: Megaphone },
+    { label: 'WhatsApp', path: '/app/whatsapp', icon: MessageSquare },
     { label: 'Settings & Page', path: '/app/settings', icon: Settings },
   ];
 
@@ -421,60 +375,10 @@ export const AppLayout: React.FC = () => {
               >
                 {currentPage?.label || 'Overview'}
               </h2>
-
-            {/* WhatsApp Status Pill */}
-            {waConnection && (
-              <div
-                className={`status-pill ${waConnection.connection_status === 'CONNECTED' ? 'status-connected' : 'status-disconnected'}`}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    backgroundColor: waConnection.connection_status === 'CONNECTED' ? 'var(--whatsapp)' : 'var(--warning)',
-                    display: 'inline-block',
-                  }}
-                />
-                {waConnection.connection_status === 'CONNECTED' ? 'WhatsApp Connected' : 'WhatsApp Not Connected'}
-              </div>
-            )}
           </div>
 
           {/* Right: Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* Wallet Balance */}
-            {wallet && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '7px 14px',
-                  backgroundColor: 'var(--bg-surface)',
-                  border: '1px solid var(--border-default)',
-                  borderRadius: 'var(--radius-sm)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Wallet size={16} color="var(--primary)" />
-                  <div>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', display: 'block', lineHeight: 1 }}>Credits</span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                      ₹{wallet.balance.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowTopupModal(true)}
-                  className="btn btn-sm btn-accent"
-                  style={{ padding: '4px 10px', fontSize: '0.72rem' }}
-                >
-                  + Top-up
-                </button>
-              </div>
-            )}
-
             {/* Public Page */}
             {tenant && (
               <a
@@ -522,60 +426,6 @@ export const AppLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
-
-      {/* ─── Top-up Modal ─── */}
-      {showTopupModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3 className="modal-title">Add Messaging Credits</h3>
-              <button
-                onClick={() => setShowTopupModal(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 20 }}>
-              Messaging credits are deducted when sending WhatsApp templates (₹0.78 per marketing message).
-            </p>
-            <form onSubmit={handleTopup}>
-              <div style={{ marginBottom: 18 }}>
-                <label className="form-label">Select Recharge Amount (INR)</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
-                  {['250', '500', '1000'].map((amt) => (
-                    <button
-                      type="button"
-                      key={amt}
-                      onClick={() => setTopupAmount(amt)}
-                      className={`btn btn-sm ${topupAmount === amt ? 'btn-accent' : 'btn-secondary'}`}
-                    >
-                      ₹{amt}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={topupAmount}
-                  onChange={(e) => setTopupAmount(e.target.value)}
-                  placeholder="Custom amount"
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button type="button" onClick={() => setShowTopupModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" disabled={topupLoading} className="btn btn-primary">
-                  {topupLoading ? 'Adding...' : 'Confirm Top-up'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

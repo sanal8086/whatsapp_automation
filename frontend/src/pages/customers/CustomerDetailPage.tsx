@@ -5,17 +5,17 @@ import {
   Award,
   Phone,
   Mail,
+  MapPin,
   Calendar,
   DollarSign,
-  PlusCircle,
   Gift,
-  Send,
   CheckCircle2,
   X
 } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { CustomerDetail, LoyaltyReward } from '../../types';
 import { StatCard } from '../../components/ui';
+import { alertError } from '../../utils/alert';
 
 export const CustomerDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,21 +24,10 @@ export const CustomerDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Modals
-  const [showAwardModal, setShowAwardModal] = useState(false);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
-  const [showMsgModal, setShowMsgModal] = useState(false);
-
-  // Award points form
-  const [spendAmount, setSpendAmount] = useState('500');
-  const [manualPoints, setManualPoints] = useState('');
-  const [awardDesc, setAwardDesc] = useState('In-store purchase');
 
   // Redeem form
   const [selectedRewardId, setSelectedRewardId] = useState('');
-
-  // WhatsApp msg form
-  const [msgText, setMsgText] = useState('Hi! Thank you for dining with us today. Here are your updated loyalty points!');
-  const [msgSending, setMsgSending] = useState(false);
 
   const fetchCustomer = async () => {
     try {
@@ -63,25 +52,6 @@ export const CustomerDetailPage: React.FC = () => {
     fetchCustomer();
   }, [id]);
 
-  const handleAwardPoints = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await apiRequest('/loyalty/earn', {
-        method: 'POST',
-        body: JSON.stringify({
-          customer_id: id,
-          amount_spent: parseFloat(spendAmount) || 0,
-          points: manualPoints ? parseInt(manualPoints) : undefined,
-          description: awardDesc,
-        }),
-      });
-      setShowAwardModal(false);
-      fetchCustomer();
-    } catch (err: any) {
-      alert(err.message || 'Error awarding points');
-    }
-  };
-
   const handleRedeemReward = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -95,27 +65,7 @@ export const CustomerDetailPage: React.FC = () => {
       setShowRedeemModal(false);
       fetchCustomer();
     } catch (err: any) {
-      alert(err.message || 'Error redeeming points');
-    }
-  };
-
-  const handleSendWhatsApp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMsgSending(true);
-    try {
-      await apiRequest('/whatsapp/send-test', {
-        method: 'POST',
-        body: JSON.stringify({
-          phone: customer?.phone_normalized || customer?.phone,
-          custom_text: msgText,
-        }),
-      });
-      alert('Message sent successfully!');
-      setShowMsgModal(false);
-    } catch (err: any) {
-      alert(err.message || 'Error sending message');
-    } finally {
-      setMsgSending(false);
+      alertError(err.message || 'Error redeeming points');
     }
   };
 
@@ -175,6 +125,12 @@ export const CustomerDetailPage: React.FC = () => {
                   {customer.email}
                 </span>
               )}
+              {customer.address && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={14} />
+                  {customer.address}
+                </span>
+              )}
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Calendar size={14} />
                 Joined {new Date(customer.created_at).toLocaleDateString()}
@@ -184,14 +140,6 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={() => setShowMsgModal(true)} className="btn btn-whatsapp">
-            <Send size={15} />
-            Send WhatsApp
-          </button>
-          <button onClick={() => setShowAwardModal(true)} className="btn btn-primary">
-            <PlusCircle size={15} />
-            Award Points
-          </button>
           <button onClick={() => setShowRedeemModal(true)} className="btn btn-secondary">
             <Gift size={15} />
             Redeem Reward
@@ -291,36 +239,6 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal: Award Points */}
-      {showAwardModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="modal-content" style={{ maxWidth: '420px', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Award Loyalty Points</h3>
-              <button onClick={() => setShowAwardModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleAwardPoints}>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Bill Amount Spent (INR)</label>
-                <input type="number" className="form-input" value={spendAmount} onChange={(e) => setSpendAmount(e.target.value)} required />
-              </div>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Custom Override Points (Optional)</label>
-                <input type="number" className="form-input" placeholder="Leave empty for auto-calculate" value={manualPoints} onChange={(e) => setManualPoints(e.target.value)} />
-              </div>
-              <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Transaction Note</label>
-                <input type="text" className="form-input" value={awardDesc} onChange={(e) => setAwardDesc(e.target.value)} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setShowAwardModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Confirm & Award</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Modal: Redeem Reward */}
       {showRedeemModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
@@ -343,30 +261,6 @@ export const CustomerDetailPage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button type="button" onClick={() => setShowRedeemModal(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-primary">Confirm Claim</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Send WhatsApp */}
-      {showMsgModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="modal-content" style={{ maxWidth: '450px', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Send WhatsApp Message</h3>
-              <button onClick={() => setShowMsgModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSendWhatsApp}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Message Text</label>
-                <textarea className="form-input" rows={4} value={msgText} onChange={(e) => setMsgText(e.target.value)} required />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setShowMsgModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" disabled={msgSending} className="btn btn-whatsapp">
-                  {msgSending ? 'Sending...' : 'Send Message'}
-                </button>
               </div>
             </form>
           </div>
